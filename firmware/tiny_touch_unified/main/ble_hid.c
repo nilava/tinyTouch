@@ -4,6 +4,7 @@
 
 #include "esp_hidd.h"
 #include "esp_hid_gap.h"
+#include "esp_gap_ble_api.h"
 #include "esp_event.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
@@ -191,10 +192,11 @@ bool ble_hid_start_pairing(void) {
 }
 
 void ble_hid_status(char *out, size_t cap) {
-  snprintf(out, cap, "enabled=%s state=%s slot=%u text=%s err=%s",
+  int bonds = started ? esp_ble_get_bond_device_num() : -1;
+  snprintf(out, cap, "enabled=%s state=%s slot=%u text=%s bonds=%d err=%s",
            cfg_enabled ? "yes" : "no",
            connected ? "connected" : (started ? "advertising" : "off"),
-           cfg_slot, cfg_text[0] ? "set" : "unset", ble_error);
+           cfg_slot, cfg_text[0] ? "set" : "unset", bonds, ble_error);
 }
 
 // The copied esp_hid_gap.c calls these on BLE connect/disconnect. Connection
