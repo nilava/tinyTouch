@@ -20,6 +20,8 @@
 #define CFG_TUD_CDC 1
 #define CFG_TUD_MSC 0
 #define CFG_TUD_HID 1
+// Config feature report is 191 bytes; the HID report buffer must hold it.
+#define CFG_TUD_HID_EP_BUFSIZE 192
 #define CFG_TUD_MIDI 0
 #define CFG_TUD_VENDOR 0
 
