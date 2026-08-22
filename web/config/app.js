@@ -24,6 +24,11 @@ function parseKV(text) {
   }
   return out;
 }
+function markDisconnected() {
+  connPill.classList.remove("on"); connText.textContent = "Disconnected";
+  controls.disabled = true; lockbar.classList.remove("unlocked");
+  device = null;
+}
 function setDot(id, cls) { const el = $(id); if (el) el.className = "sdot " + (cls || ""); }
 function setText(id, v) { const el = $(id); if (el) { el.textContent = v; el.classList.remove("skeleton"); } }
 const hidSupported = "hid" in navigator;
@@ -272,6 +277,7 @@ const actions = {
     return `BLE_TEXT ${t}`;
   },
   reboot: () => "REBOOT",
+  bootloader: () => "BOOTLOADER",
 };
 
 const OK_LABELS = { reboot: "Rebooting", "ble-enable": "Saved", pin: "Set" };
@@ -279,14 +285,22 @@ controls.addEventListener("click", async (event) => {
   const button = event.target.closest("button[data-cmd]");
   if (!button || !actions[button.dataset.cmd]) return;
   const cmd = button.dataset.cmd;
+  // These reboot the device, which drops the USB/HID link — don't expect a reply.
+  const reboots = cmd === "reboot" || cmd === "bootloader";
   try {
     await withButton(button, async () => {
-      const response = await sendCommand(actions[cmd]());
-      if (response.startsWith("ERR")) throw new Error(friendlyError(cmd, response));
-      return response;
+      try {
+        const response = await sendCommand(actions[cmd](), { timeoutMs: reboots ? 2500 : 8000 });
+        if (response.startsWith("ERR")) throw new Error(friendlyError(cmd, response));
+        return response;
+      } catch (e) {
+        if (reboots) return "ok";  // link dropped on reboot, expected
+        throw e;
+      }
     }, OK_LABELS[cmd] || "Saved");
-    toast(successMessage(cmd), "success");
-    if (cmd !== "reboot") await refreshStatus();
+    toast(successMessage(cmd), reboots ? "info" : "success");
+    if (reboots) { markDisconnected(); }
+    else await refreshStatus();
   } catch (error) {
     toast(error.message, "error");
   }
@@ -299,6 +313,7 @@ function successMessage(cmd) {
     pin: "PIN updated",
     duress: "Duress slot saved",
     reboot: "Device rebooting…",
+    bootloader: "Rebooting into flash mode — reconnect after flashing",
     "ble-enable": "BLE setting saved — reboot to apply",
     "ble-slot": "BLE trigger slot saved",
     "ble-text": "BLE text saved",
