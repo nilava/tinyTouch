@@ -653,14 +653,18 @@ esp_err_t esp_hid_ble_gap_adv_init(uint16_t appearance, const char *device_name)
 
     esp_err_t ret;
 
-    // 16-bit HID service UUID (0x1812). The 128-bit form pushed the advertising
-    // payload past the 31-byte limit, so config_adv_data dropped fields and iOS
-    // never saw the HID UUID or name — the device advertised but was invisible.
-    static uint8_t hidd_service_uuid16[] = { 0x12, 0x18 };
+    // Bluedroid's config_adv_data wants the 128-bit UUID array (a 2-byte UUID
+    // returns ESP_ERR_INVALID_ARG). Keep the 128-bit HID UUID + appearance in
+    // the advertisement (flags 3 + appearance 4 + uuid 18 = 25 bytes, within
+    // the 31-byte limit) and put the device NAME in the scan response, so iOS
+    // sees both the HID service and the name without overflowing.
+    static const uint8_t hidd_service_uuid128[] = {
+        0xfb, 0x34, 0x9b, 0x5f, 0x80, 0x00, 0x00, 0x80, 0x00, 0x10, 0x00, 0x00, 0x12, 0x18, 0x00, 0x00,
+    };
 
     esp_ble_adv_data_t ble_adv_data = {
         .set_scan_rsp = false,
-        .include_name = true,
+        .include_name = false,
         .include_txpower = false,
         .min_interval = 0x0006, //slave connection min interval, Time = min_interval * 1.25 msec
         .max_interval = 0x0010, //slave connection max interval, Time = max_interval * 1.25 msec
@@ -669,9 +673,14 @@ esp_err_t esp_hid_ble_gap_adv_init(uint16_t appearance, const char *device_name)
         .p_manufacturer_data =  NULL,
         .service_data_len = 0,
         .p_service_data = NULL,
-        .service_uuid_len = sizeof(hidd_service_uuid16),
-        .p_service_uuid = hidd_service_uuid16,
+        .service_uuid_len = sizeof(hidd_service_uuid128),
+        .p_service_uuid = (uint8_t *)hidd_service_uuid128,
         .flag = 0x6,
+    };
+    esp_ble_adv_data_t scan_rsp_data = {
+        .set_scan_rsp = true,
+        .include_name = true,
+        .include_txpower = true,
     };
 
     esp_ble_auth_req_t auth_req = ESP_LE_AUTH_REQ_SC_MITM_BOND;
@@ -721,6 +730,11 @@ esp_err_t esp_hid_ble_gap_adv_init(uint16_t appearance, const char *device_name)
 
     if ((ret = esp_ble_gap_config_adv_data(&ble_adv_data)) != ESP_OK) {
         ESP_LOGE(TAG, "GAP config_adv_data failed: %d", ret);
+        return ret;
+    }
+
+    if ((ret = esp_ble_gap_config_adv_data(&scan_rsp_data)) != ESP_OK) {
+        ESP_LOGE(TAG, "GAP config scan_rsp_data failed: %d", ret);
         return ret;
     }
 
