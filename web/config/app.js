@@ -182,6 +182,13 @@ const actions = {
     return `PIN_SET ${pin}`;
   },
   duress: () => `DURESS_SLOT ${$("#duress").value}`,
+  "ble-enable": () => `BLE_ENABLE ${$("#ble-enable").value}`,
+  "ble-slot": () => `BLE_SLOT ${$("#ble-slot").value}`,
+  "ble-text": () => {
+    const t = $("#ble-text").value;
+    if (!t) throw new Error("Enter text to type.");
+    return `BLE_TEXT ${t}`;
+  },
   mode: () => `MODE ${$("#mode").value}`,
   reboot: () => "REBOOT",
 };

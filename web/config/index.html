@@ -43,6 +43,15 @@
       </label>
       <button data-cmd="mode" type="button">Switch mode</button>
 
+      <h2>BLE keyboard</h2>
+      <p class="note">Type a credential to a paired iPad/phone/TV over Bluetooth when a chosen finger matches.</p>
+      <label>Enable <select id="ble-enable"><option value="off">off</option><option value="on">on</option></select></label>
+      <label>Trigger slot <select id="ble-slot"><option value="off">disabled</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select></label>
+      <label>Text to type <input id="ble-text" type="text" autocomplete="off"></label>
+      <button data-cmd="ble-enable" type="button">Save enable</button>
+      <button data-cmd="ble-slot" type="button">Save slot</button>
+      <button data-cmd="ble-text" type="button">Save text</button>
+
       <h2>Firmware update</h2>
       <p class="note">Reboots the device into download mode, then flashes a merged image
         (<code>idf.py merge-bin</code> → build/merged-binary.bin) directly over USB. No internet needed.</p>

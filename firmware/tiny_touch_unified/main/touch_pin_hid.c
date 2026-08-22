@@ -16,6 +16,7 @@
 #include "mbedtls/aes.h"
 #include "mbedtls/md.h"
 #include "net.h"
+#include "ble_hid.h"
 #include "piv.h"
 #include "usb_descriptors.h"
 
@@ -340,6 +341,19 @@ static void touch_hid_task(void *arg) {
         config_console_duress_wipe();
       }
       net_publish_event(fingerprint_last_matched_slot(), true);
+      uint8_t ble_slot = ble_hid_slot();
+      if (ble_slot != 0 && fingerprint_last_matched_slot() == ble_slot &&
+          ble_hid_connected()) {
+        ESP_LOGI(TAG, "matched BLE slot; typing credential over Bluetooth");
+        ble_hid_type_credential();
+        last_success = xTaskGetTickCount();
+        wait_for_lift = true;
+        vTaskDelay(pdMS_TO_TICKS(250));
+        fingerprint_led_idle();
+        last_poll = xTaskGetTickCount();
+        vTaskDelay(pdMS_TO_TICKS(10));
+        continue;
+      }
       if (device_config_mode() == DEVICE_MODE_HID) {
         ESP_LOGI(TAG, "finger matched; requesting HID password");
         if (!request_and_type_password()) ESP_LOGW(TAG, "HID helper request failed");

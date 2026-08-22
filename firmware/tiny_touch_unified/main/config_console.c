@@ -7,6 +7,7 @@
 #include "fingerprint.h"
 #include "device_config.h"
 #include "net.h"
+#include "ble_hid.h"
 #include "piv.h"
 #include "touch_pin_hid.h"
 #include "esp_log.h"
@@ -366,6 +367,23 @@ static void handle_command(void) {
     } else {
       send_line("ERR MQTT_SET format=<uri>_<prefix>");
     }
+  } else if (strncmp(command, "BLE_ENABLE ", 11) == 0) {
+    if (!require_config_authorization()) return;
+    bool on = strcmp(command + 11, "on") == 0;
+    send_line(ble_hid_set_enabled(on) ? "OK BLE_ENABLE reboot_to_disable" : "ERR BLE_ENABLE");
+  } else if (strncmp(command, "BLE_SLOT ", 9) == 0) {
+    if (!require_config_authorization()) return;
+    const char *a = command + 9;
+    uint8_t slot = (strcmp(a, "off") == 0) ? 0 : (uint8_t)atoi(a);
+    send_line(ble_hid_set_slot(slot) ? "OK BLE_SLOT" : "ERR BLE_SLOT arg=1-5_or_off");
+  } else if (strncmp(command, "BLE_TEXT ", 9) == 0) {
+    if (!require_config_authorization()) return;
+    send_line(ble_hid_set_text(command + 9) ? "OK BLE_TEXT" : "ERR BLE_TEXT too_long");
+  } else if (strcmp(command, "BLE_STATUS") == 0) {
+    char ble[160];
+    ble_hid_status(ble, sizeof(ble));
+    snprintf(line, sizeof(line), "OK BLE_STATUS %s", ble);
+    send_line(line);
   } else if (strcmp(command, "NET_STATUS") == 0) {
     char net[128];
     net_status(net, sizeof(net));
