@@ -1,74 +1,94 @@
 <!doctype html>
 <html lang="en">
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#090909"><title>Configure tinyTouch</title>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0b0c0f"><title>Configure tinyTouch</title>
 <link rel="stylesheet" href="styles.css">
 <main class="page">
   <a class="back" href="/tinytouch/">← tinyTouch</a>
-  <h1>Configure tinyTouch</h1>
-  <p>Use Chrome or Edge with a USB data cable. This talks to the running device — no download mode needed.</p>
-  <div id="message" class="message" role="status">Connect your device to begin.</div>
-  <button id="connect" type="button">Connect device</button>
+  <div class="topbar">
+    <h1>Configure tinyTouch</h1>
+    <span id="conn-pill" class="pill"><span class="dot"></span><span id="conn-text">Disconnected</span></span>
+  </div>
+
+  <div id="message" class="message" role="status">Connect your device to begin. Chrome or Edge required.</div>
+  <button id="connect" class="btn primary block">Connect device</button>
 
   <section id="panel" hidden>
-    <p class="firmware-version">Device: <strong id="status">…</strong></p>
-    <p class="firmware-version">Network: <strong id="netstatus">…</strong></p>
+    <div class="summary" id="summary">
+      <div class="cell"><div class="k">Mode</div><div class="v"><span class="sdot" id="sd-mode"></span><span id="sum-mode">—</span></div></div>
+      <div class="cell"><div class="k">Sensor</div><div class="v"><span class="sdot" id="sd-sensor"></span><span id="sum-sensor">—</span></div></div>
+      <div class="cell"><div class="k">Fingerprints</div><div class="v"><span id="sum-fp">—</span></div></div>
+      <div class="cell"><div class="k">Wi-Fi</div><div class="v"><span class="sdot" id="sd-wifi"></span><span id="sum-wifi">—</span></div></div>
+      <div class="cell"><div class="k">MQTT</div><div class="v"><span class="sdot" id="sd-mqtt"></span><span id="sum-mqtt">—</span></div></div>
+      <div class="cell"><div class="k">BLE</div><div class="v"><span class="sdot" id="sd-ble"></span><span id="sum-ble">—</span></div></div>
+    </div>
 
-    <div id="unlock-note" class="note">Changes require a fingerprint touch to unlock configuration.</div>
-    <button id="unlock" type="button">Unlock (touch sensor)</button>
+    <div class="lockbar" id="lockbar">
+      <span class="txt" id="lock-text">🔒 Locked — unlock to change settings</span>
+      <button id="unlock" class="btn small">Unlock (touch sensor)</button>
+    </div>
 
-    <fieldset id="controls" disabled>
-      <h2>Wi-Fi</h2>
-      <label>SSID <input id="wifi-ssid" type="text" autocomplete="off"></label>
-      <label>Password <input id="wifi-psk" type="password" autocomplete="off"></label>
-      <button data-cmd="wifi" type="button">Save Wi-Fi</button>
-
-      <h2>MQTT</h2>
-      <label>Broker URI <input id="mqtt-uri" type="text" placeholder="mqtt://192.168.1.10:1883" autocomplete="off"></label>
-      <label>Topic prefix <input id="mqtt-prefix" type="text" placeholder="tinytouch" autocomplete="off"></label>
-      <button data-cmd="mqtt" type="button">Save MQTT</button>
-
-      <h2>PIV PIN</h2>
-      <label>New PIN (6–8 digits) <input id="pin" type="text" inputmode="numeric" maxlength="8" autocomplete="off"></label>
-      <button data-cmd="pin" type="button">Set PIN</button>
-
-      <h2>Duress finger</h2>
-      <label>Wipe slot
-        <select id="duress"><option value="off">disabled</option><option>1</option><option>2</option><option>3</option><option>4</option><option value="5">5 (default)</option></select>
-      </label>
-      <button data-cmd="duress" type="button">Save duress slot</button>
-
-      <h2>Mode</h2>
-      <label>Runtime mode
-        <select id="mode"><option value="piv">PIV smartcard</option><option value="hid">HID password</option></select>
-      </label>
-      <button data-cmd="mode" type="button">Switch mode</button>
-
-      <h2>BLE keyboard</h2>
-      <p class="note">Type a credential to a paired iPad/phone/TV over Bluetooth when a chosen finger matches.</p>
-      <label>Enable <select id="ble-enable"><option value="off">off</option><option value="on">on</option></select></label>
-      <label>Trigger slot <select id="ble-slot"><option value="off">disabled</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select></label>
-      <label>Text to type <input id="ble-text" type="text" autocomplete="off"></label>
-      <button data-cmd="ble-enable" type="button">Save enable</button>
-      <button data-cmd="ble-slot" type="button">Save slot</button>
-      <button data-cmd="ble-text" type="button">Save text</button>
-
-      <h2>Firmware update</h2>
-      <p class="note">Reboots the device into download mode, then flashes a merged image
-        (<code>idf.py merge-bin</code> → build/merged-binary.bin) directly over USB. No internet needed.</p>
-      <label>Merged firmware .bin <input id="fw-file" type="file" accept=".bin"></label>
-      <button id="flash-fw" type="button">Reboot to download mode &amp; flash</button>
-      <div id="flash-progress" class="progress-wrap" hidden>
-        <div><span id="flash-stage">Flashing</span> <strong id="flash-percent">0%</strong></div>
-        <progress id="flash-bar" max="100" value="0">0%</progress>
+    <fieldset id="controls" class="controls" disabled>
+      <div class="card">
+        <h2>Mode</h2>
+        <p class="note">How the device authenticates: PIV smartcard or a typed password over USB.</p>
+        <div class="segmented" id="mode-seg">
+          <button type="button" data-mode="piv">PIV smartcard</button>
+          <button type="button" data-mode="hid">HID password</button>
+        </div>
       </div>
 
-      <h2>Device</h2>
-      <button data-cmd="reboot" type="button">Reboot device</button>
+      <div class="card">
+        <h2>Wi-Fi</h2>
+        <div class="field"><label>SSID</label><input id="wifi-ssid" type="text" autocomplete="off"><button class="btn small" data-cmd="wifi">Save</button></div>
+        <div class="field"><label>Password</label><input id="wifi-psk" type="password" autocomplete="off"><span></span></div>
+      </div>
+
+      <div class="card">
+        <h2>MQTT</h2>
+        <div class="field"><label>Broker URI</label><input id="mqtt-uri" type="text" placeholder="mqtt://192.168.1.10:1883" autocomplete="off"><button class="btn small" data-cmd="mqtt">Save</button></div>
+        <div class="field"><label>Topic prefix</label><input id="mqtt-prefix" type="text" placeholder="tinytouch" autocomplete="off"><span></span></div>
+      </div>
+
+      <div class="card">
+        <h2>Security</h2>
+        <div class="field"><label>PIV PIN</label><input id="pin" type="text" inputmode="numeric" maxlength="8" placeholder="6–8 digits" autocomplete="off"><button class="btn small" data-cmd="pin">Set PIN</button></div>
+        <div class="field"><label>Duress finger</label>
+          <select id="duress"><option value="off">disabled</option><option>1</option><option>2</option><option>3</option><option>4</option><option value="5">5</option></select>
+          <button class="btn small" data-cmd="duress">Save</button></div>
+        <p class="note">The duress finger wipes the device when matched.</p>
+      </div>
+
+      <div class="card">
+        <h2>BLE keyboard</h2>
+        <p class="note">Type a credential to a paired iPad/phone/TV over Bluetooth when a chosen finger matches.</p>
+        <div class="field"><label>Enable</label>
+          <select id="ble-enable"><option value="off">off</option><option value="on">on</option></select>
+          <button class="btn small" data-cmd="ble-enable">Save</button></div>
+        <div class="field"><label>Trigger slot</label>
+          <select id="ble-slot"><option value="off">disabled</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
+          <button class="btn small" data-cmd="ble-slot">Save</button></div>
+        <div class="field"><label>Text to type</label><input id="ble-text" type="text" autocomplete="off"><button class="btn small" data-cmd="ble-text">Save</button></div>
+      </div>
+
+      <div class="card">
+        <h2>Firmware update</h2>
+        <p class="note">Reboots into download mode, then flashes a merged image (<code>idf.py merge-bin</code>) over USB.</p>
+        <div class="field"><label>Merged .bin</label><input id="fw-file" type="file" accept=".bin"><button id="flash-fw" class="btn small">Flash</button></div>
+        <div id="flash-progress" class="progress-wrap" hidden>
+          <div><span id="flash-stage">Flashing</span> <strong id="flash-percent">0%</strong></div>
+          <progress id="flash-bar" max="100" value="0">0%</progress>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Device</h2>
+        <button class="btn small" data-cmd="reboot">Reboot device</button>
+      </div>
     </fieldset>
   </section>
 
   <p id="browser-note" class="note"></p>
-  <pre id="log" hidden>No device activity yet.</pre>
+  <details><summary>Activity log</summary><pre id="log" hidden>No device activity yet.</pre></details>
 </main>
 <script type="module" src="app.js"></script>
 </html>

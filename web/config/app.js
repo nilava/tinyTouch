@@ -11,6 +11,21 @@ const message = $("#message");
 const log = $("#log");
 const panel = $("#panel");
 const controls = $("#controls");
+const connPill = $("#conn-pill");
+const connText = $("#conn-text");
+const lockbar = $("#lockbar");
+const lockText = $("#lock-text");
+
+function parseKV(text) {
+  const out = {};
+  for (const tok of text.trim().split(/\s+/)) {
+    const i = tok.indexOf("=");
+    if (i > 0) out[tok.slice(0, i)] = tok.slice(i + 1);
+  }
+  return out;
+}
+function setDot(id, cls) { const el = $(id); if (el) el.className = "sdot " + (cls || ""); }
+function setText(id, v) { const el = $(id); if (el) el.textContent = v; }
 const hidSupported = "hid" in navigator;
 
 const USB_VID = 0x303a;
@@ -98,14 +113,36 @@ async function sendCommand(command, { timeoutMs = 8000 } = {}) {
 }
 
 async function refreshStatus() {
+  let mode = null;
   try {
-    const status = await sendCommand("STATUS");
-    $("#status").textContent = status.replace(/^OK STATUS /, "");
-  } catch { $("#status").textContent = "unavailable"; }
+    const s = parseKV((await sendCommand("STATUS")).replace(/^OK STATUS /, ""));
+    mode = s.mode;
+    setText("#sum-mode", s.mode === "hid" ? "HID password" : "PIV smartcard");
+    setDot("#sd-mode", "ok");
+    const sensorOk = s.sensor === "ok";
+    setText("#sum-sensor", sensorOk ? "OK" : (s.sensor || "—"));
+    setDot("#sd-sensor", sensorOk ? "ok" : "warn");
+    setText("#sum-fp", s.fingerprints ?? "—");
+    // reflect mode in the segmented control
+    document.querySelectorAll("#mode-seg button").forEach((b) =>
+      b.classList.toggle("active", b.dataset.mode === s.mode));
+  } catch {}
   try {
-    const net = await sendCommand("NET_STATUS");
-    $("#netstatus").textContent = net.replace(/^OK NET_STATUS /, "");
-  } catch { $("#netstatus").textContent = "unavailable"; }
+    const n = parseKV((await sendCommand("NET_STATUS")).replace(/^OK NET_STATUS /, ""));
+    const wifi = (n.wifi || "").split("/");
+    setText("#sum-wifi", wifi[0] === "configured" ? (wifi[1] === "up" ? "Connected" : "Configured") : "Not set");
+    setDot("#sd-wifi", wifi[1] === "up" ? "ok" : (wifi[0] === "configured" ? "warn" : "off"));
+    setText("#sum-mqtt", n.mqtt === "connected" ? "Connected" : (n.mqtt === "configured" ? "Configured" : "Not set"));
+    setDot("#sd-mqtt", n.mqtt === "connected" ? "ok" : (n.mqtt === "configured" ? "warn" : "off"));
+  } catch {}
+  try {
+    const b = parseKV((await sendCommand("BLE_STATUS")).replace(/^OK BLE_STATUS /, ""));
+    const on = b.enabled === "yes";
+    setText("#sum-ble", on ? (b.state === "connected" ? "Connected" : "On") : "Off");
+    setDot("#sd-ble", b.state === "connected" ? "ok" : (on ? "warn" : "off"));
+    if ($("#ble-enable")) $("#ble-enable").value = on ? "on" : "off";
+    if ($("#ble-slot")) $("#ble-slot").value = (b.slot && b.slot !== "0") ? b.slot : "off";
+  } catch {}
 }
 
 $("#connect").addEventListener("click", async () => {
@@ -146,6 +183,8 @@ $("#connect").addEventListener("click", async () => {
     const pong = await sendCommand("PING", { timeoutMs: 3000 });
     if (pong !== "PONG") throw new Error("Unexpected reply: " + pong);
     show("Connected.", "success");
+    connPill.classList.add("on");
+    connText.textContent = "Connected";
     panel.hidden = false;
     await refreshStatus();
   } catch (error) {
@@ -160,6 +199,8 @@ $("#unlock").addEventListener("click", async () => {
     if (line.startsWith("ERR")) throw new Error("Fingerprint not recognized.");
     show("Configuration unlocked for 120 seconds.", "success");
     controls.disabled = false;
+    lockbar.classList.add("unlocked");
+    lockText.textContent = "🔓 Unlocked — settings can be changed for 120s";
   } catch (error) {
     show(error.message, "error");
   }
@@ -189,7 +230,6 @@ const actions = {
     if (!t) throw new Error("Enter text to type.");
     return `BLE_TEXT ${t}`;
   },
-  mode: () => `MODE ${$("#mode").value}`,
   reboot: () => "REBOOT",
 };
 
@@ -209,6 +249,19 @@ controls.addEventListener("click", async (event) => {
   }
 });
 
+
+// Mode segmented control: send MODE and reflect the new active state.
+document.querySelectorAll("#mode-seg button").forEach((btn) => {
+  btn.addEventListener("click", async () => {
+    if (controls.disabled) { show("Unlock configuration first.", "error"); return; }
+    try {
+      const resp = await sendCommand(`MODE ${btn.dataset.mode}`);
+      if (resp.startsWith("ERR")) { show(resp, "error"); return; }
+      show(resp, "success");
+      await refreshStatus();
+    } catch (e) { show(e.message, "error"); }
+  });
+});
 
 // Firmware flashing: send BOOTLOADER over the HID config channel to reboot the
 // S3 into ROM download mode, then drive esptool-js over Web Serial to write a
