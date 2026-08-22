@@ -4,6 +4,8 @@
 // PING/PONG, STATUS, CONFIG_UNLOCK, WIFI_SET, MQTT_SET, PIN_SET, DURESS_SLOT,
 // MODE, NET_STATUS, REBOOT.
 
+import { ESPLoader, Transport } from "./vendor/esptool-js.js";
+
 const $ = (sel) => document.querySelector(sel);
 const message = $("#message");
 const log = $("#log");
@@ -146,12 +148,6 @@ const actions = {
     return `PIN_SET ${pin}`;
   },
   duress: () => `DURESS_SLOT ${$("#duress").value}`,
-  "ota-url": () => {
-    const url = $("#ota-url").value.trim();
-    if (!/^https:\/\//.test(url)) throw new Error("Enter an https:// image URL.");
-    return `OTA_URL ${url}`;
-  },
-  "ota-check": () => "OTA_CHECK",
   mode: () => `MODE ${$("#mode").value}`,
   reboot: () => "REBOOT",
 };
@@ -172,5 +168,57 @@ controls.addEventListener("click", async (event) => {
     }
   } catch (error) {
     show(error.message, "error");
+  }
+});
+
+
+// Firmware flashing: reboot the running device into ROM download mode via the
+// BOOTLOADER console command, let it re-enumerate, then drive esptool-js to
+// write a merged image over USB. Replaces device-side OTA entirely, so the
+// firmware carries no TLS/HTTP/OTA stack.
+$("#flash-fw").addEventListener("click", async () => {
+  const file = $("#fw-file").files[0];
+  if (!file) { show("Choose a merged .bin file first.", "error"); return; }
+  if (controls.disabled) { show("Unlock configuration first.", "error"); return; }
+  try {
+    show("Rebooting device into download mode…");
+    await sendCommand("BOOTLOADER", { expect: (l) => /^OK BOOTLOADER/.test(l), timeoutMs: 4000 });
+
+    // The console port drops as the device re-enumerates in download mode.
+    try { await writer.close(); } catch {}
+    try { await port.close(); } catch {}
+    port = null; writer = null;
+
+    show("Select the device again (now in download mode)…");
+    const dlPort = await navigator.serial.requestPort();
+    const transport = new Transport(dlPort, false);
+    const terminal = { clean(){}, write:writeLog, writeLine:writeLog };
+    const loader = new ESPLoader({ transport, baudrate: 460800, terminal, debugLogging: false });
+    await loader.main("no_reset");
+
+    const buffer = await file.arrayBuffer();
+    let binary = "";
+    const bytes = new Uint8Array(buffer);
+    for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+
+    const wrap = $("#flash-progress");
+    wrap.hidden = false;
+    await loader.writeFlash({
+      fileArray: [{ data: binary, address: 0 }],
+      flashSize: "keep",
+      eraseAll: false,
+      compress: true,
+      reportProgress: (_i, written, total) => {
+        const pct = Math.round((written / total) * 100);
+        $("#flash-bar").value = pct;
+        $("#flash-percent").textContent = `${pct}%`;
+      },
+    });
+    await loader.after("hard_reset");
+    show("Firmware flashed. Device rebooting — reconnect to continue.", "success");
+  } catch (error) {
+    show(/download mode|sync|connect|timeout/i.test(error.message)
+      ? "The board did not enter download mode. Unplug/replug, or hold BOOT + tap RESET, then retry."
+      : error.message, "error");
   }
 });

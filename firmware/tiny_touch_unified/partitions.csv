@@ -1,9 +1,5 @@
 # Name,   Type, SubType, Offset,   Size
-# NVS kept at its original 0x9000/0x6000 so provisioned devices survive reflashes.
-# Two 1.5MB OTA slots in 4MB flash enable esp_https_ota updates. App start is
-# pushed to 0x20000 so otadata + phy fit after the preserved NVS region.
+# NVS kept at its original offset/size so provisioned devices survive the resize.
 nvs,      data, nvs,     0x9000,   0x6000
 phy_init, data, phy,     0xf000,   0x1000
-otadata,  data, ota,     0x11000,  0x2000
-ota_0,    app,  ota_0,   0x20000,  0x180000
-ota_1,    app,  ota_1,   0x1a0000, 0x180000
+factory,  app,  factory, 0x10000,  0x300000

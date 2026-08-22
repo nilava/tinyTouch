@@ -43,10 +43,15 @@
       </label>
       <button data-cmd="mode" type="button">Switch mode</button>
 
-      <h2>Firmware update (OTA)</h2>
-      <label>Image URL <input id="ota-url" type="text" placeholder="https://github.com/.../tiny_touch_unified.bin" autocomplete="off"></label>
-      <button data-cmd="ota-url" type="button">Save URL</button>
-      <button data-cmd="ota-check" type="button">Update now</button>
+      <h2>Firmware update</h2>
+      <p class="note">Reboots the device into download mode, then flashes a merged image
+        (<code>idf.py merge-bin</code> → build/merged-binary.bin) directly over USB. No internet needed.</p>
+      <label>Merged firmware .bin <input id="fw-file" type="file" accept=".bin"></label>
+      <button id="flash-fw" type="button">Reboot to download mode &amp; flash</button>
+      <div id="flash-progress" class="progress-wrap" hidden>
+        <div><span id="flash-stage">Flashing</span> <strong id="flash-percent">0%</strong></div>
+        <progress id="flash-bar" max="100" value="0">0%</progress>
+      </div>
 
       <h2>Device</h2>
       <button data-cmd="reboot" type="button">Reboot device</button>

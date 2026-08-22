@@ -9,11 +9,9 @@ idf_component_register(
     "usb_ccid.c"
     "usb_descriptors.c"
     "net.c"
-    "ota.c"
   INCLUDE_DIRS "."
   REQUIRES driver esp_timer esp_tinyusb mbedtls nvs_flash
             esp_wifi esp_event esp_netif esp-tls mqtt lwip
-            esp_https_ota esp_http_client app_update
 )
 
 if(TINYTOUCH_RECOVERY_BUILD)
