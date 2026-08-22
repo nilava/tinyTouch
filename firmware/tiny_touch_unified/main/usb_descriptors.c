@@ -1,5 +1,7 @@
 #include "tusb.h"
 
+#include "usb_descriptors.h"
+
 #include <stdio.h>
 
 #include "esp_mac.h"
@@ -22,8 +24,23 @@
 #define EPNUM_CDC_IN 0x84
 #define CONFIG_TOTAL_LEN (TUD_CONFIG_DESC_LEN + 9 + 54 + 7 + 7 + TUD_HID_DESC_LEN + TUD_CDC_DESC_LEN)
 
+
 uint8_t const tiny_touch_hid_report_descriptor[] = {
-  TUD_HID_REPORT_DESC_KEYBOARD()
+  TUD_HID_REPORT_DESC_KEYBOARD(HID_REPORT_ID(HID_REPORT_ID_KEYBOARD)),
+  // Vendor-defined feature-report collection for the config channel. Feature
+  // reports transfer over the control endpoint, so this adds no USB endpoints
+  // (the ESP32-S3 OTG core has none to spare alongside CCID + HID + CDC).
+  0x06, 0x00, 0xFF,             // Usage Page (Vendor 0xFF00)
+  0x09, 0x01,                   // Usage (0x01)
+  0xA1, 0x01,                   // Collection (Application)
+  0x85, HID_REPORT_ID_CONFIG,   //   Report ID (2)
+  0x09, 0x02,                   //   Usage (0x02)
+  0x15, 0x00,                   //   Logical Minimum (0)
+  0x26, 0xFF, 0x00,             //   Logical Maximum (255)
+  0x75, 0x08,                   //   Report Size (8)
+  0x95, HID_CONFIG_REPORT_SIZE, //   Report Count (63)
+  0xB1, 0x02,                   //   Feature (Data,Var,Abs)
+  0xC0                          // End Collection
 };
 
 const tusb_desc_device_t tiny_touch_device_descriptor = {

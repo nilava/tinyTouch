@@ -21,6 +21,7 @@
 #include "soc/rtc_cntl_reg.h"
 #include "soc/soc.h"
 #include "tusb.h"
+#include "usb_descriptors.h"
 
 #ifndef TINYTOUCH_FIRMWARE_VERSION
 #define TINYTOUCH_FIRMWARE_VERSION "development"
@@ -34,6 +35,16 @@ static size_t command_len;
 static SemaphoreHandle_t cdc_write_mutex;
 static int64_t config_authorized_until;
 
+// Config transport: the console line protocol is reachable over both the CDC
+// serial port (CLI / Web Serial) and a HID feature report (browser WebHID). The
+// HID path never touches the CDC the macOS helper holds, so it never contends.
+typedef enum { TRANSPORT_CDC, TRANSPORT_HID } transport_t;
+static transport_t active_transport = TRANSPORT_CDC;
+static char hid_command[HID_CONFIG_REPORT_SIZE + 1];
+static volatile bool hid_command_pending;
+static char hid_response[HID_CONFIG_REPORT_SIZE + 1] = "IDLE";
+static volatile bool hid_processing;
+
 typedef struct {
   uint8_t data[2400];
   size_t length;
@@ -45,6 +56,11 @@ static provision_buffer_t provision_cert9d;
 static provision_buffer_t provision_key9d;
 
 void config_console_send_line(const char *line) {
+  if (active_transport == TRANSPORT_HID) {
+    // Keep the latest line as the response the host will read back.
+    strlcpy(hid_response, line, sizeof(hid_response));
+    return;
+  }
   if (cdc_write_mutex) xSemaphoreTake(cdc_write_mutex, portMAX_DELAY);
   const char *parts[] = {line, "\r\n"};
   for (size_t part = 0; part < 2; part++) {
@@ -441,8 +457,40 @@ static void console_task(void *arg) {
         command[command_len++] = c;
       }
     }
+    if (hid_command_pending) {
+      hid_command_pending = false;
+      hid_processing = true;
+      // Run the shared command handler with output captured into hid_response.
+      strlcpy(command, hid_command, sizeof(command));
+      command_len = strlen(command);
+      active_transport = TRANSPORT_HID;
+      if (command_len) handle_command();
+      active_transport = TRANSPORT_CDC;
+      command_len = 0;
+      hid_processing = false;
+    }
     vTaskDelay(pdMS_TO_TICKS(10));
   }
+}
+
+// Called from the HID SET_REPORT callback (USB task context): copy the command
+// and let the console task process it, so blocking commands (e.g. the
+// fingerprint touch in CONFIG_UNLOCK) never stall the USB stack.
+void config_hid_on_command(const uint8_t *data, size_t len) {
+  if (hid_processing || hid_command_pending) return;
+  if (len > HID_CONFIG_REPORT_SIZE) len = HID_CONFIG_REPORT_SIZE;
+  size_t n = 0;
+  while (n < len && data[n] != 0) { hid_command[n] = (char)data[n]; n++; }
+  hid_command[n] = 0;
+  strlcpy(hid_response, "PENDING", sizeof(hid_response));
+  hid_command_pending = true;
+}
+
+// Called from the HID GET_REPORT callback: hand back the current response.
+size_t config_hid_read_response(uint8_t *out, size_t cap) {
+  const char *src = (hid_processing || hid_command_pending) ? "PENDING" : hid_response;
+  size_t n = strlcpy((char *)out, src, cap);
+  return n < cap ? n : cap - 1;
 }
 
 void config_console_start(void) {

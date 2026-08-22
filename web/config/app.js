@@ -1,8 +1,8 @@
-// tinyTouch web config: drives the running firmware's USB CDC console over
-// Web Serial. Unlike the flasher/recovery pages (which use esptool-js in
-// download mode), this speaks the line protocol to already-running firmware:
-// PING/PONG, STATUS, CONFIG_UNLOCK, WIFI_SET, MQTT_SET, PIN_SET, DURESS_SLOT,
-// MODE, NET_STATUS, REBOOT.
+// tinyTouch web config over WebHID. The config channel is a HID feature report
+// (report ID 2) on the device's HID interface — a different USB interface from
+// the CDC the macOS helper holds, so the browser and the helper never contend
+// for a port. Feature reports ride the control endpoint, so this needs no extra
+// USB endpoints (the ESP32-S3 OTG core has none to spare).
 
 import { ESPLoader, Transport } from "./vendor/esptool-js.js";
 
@@ -11,10 +11,15 @@ const message = $("#message");
 const log = $("#log");
 const panel = $("#panel");
 const controls = $("#controls");
-const serialSupported = "serial" in navigator;
+const hidSupported = "hid" in navigator;
 
-if (!serialSupported) {
-  $("#browser-note").textContent = "Open this page in Google Chrome or Microsoft Edge.";
+const USB_VID = 0x303a;
+const USB_PID = 0x4001;
+const REPORT_ID = 2;
+const REPORT_SIZE = 191;
+
+if (!hidSupported) {
+  $("#browser-note").textContent = "Open this page in Google Chrome or Microsoft Edge (WebHID required).";
   $("#connect").disabled = true;
 }
 
@@ -22,108 +27,87 @@ function show(text, kind = "") {
   message.textContent = text;
   message.className = `message ${kind}`.trim();
 }
-
 function writeLog(value) {
-  const line = value.trim();
+  const line = String(value).trim();
   if (!line) return;
   log.hidden = false;
   log.textContent = log.textContent === "No device activity yet." ? line : `${log.textContent}\n${line}`;
   log.scrollTop = log.scrollHeight;
 }
 
-let port = null;
-let writer = null;
-let lineWaiters = [];
-let lineBuffer = "";
+let device = null;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// Resolve the next console line that satisfies match(line).
-function waitForLine(match, timeoutMs = 8000) {
-  return new Promise((resolve, reject) => {
-    const waiter = { match, resolve, reject };
-    lineWaiters.push(waiter);
-    waiter.timer = setTimeout(() => {
-      lineWaiters = lineWaiters.filter((w) => w !== waiter);
-      reject(new Error("Timed out waiting for the device."));
-    }, timeoutMs);
-  });
+function decodeReport(view) {
+  const bytes = new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
+  let end = bytes.indexOf(0);
+  if (end < 0) end = bytes.length;
+  return new TextDecoder().decode(bytes.subarray(0, end));
 }
 
-function dispatchLine(line) {
-  writeLog(`← ${line}`);
-  for (const waiter of [...lineWaiters]) {
-    if (waiter.match(line)) {
-      clearTimeout(waiter.timer);
-      lineWaiters = lineWaiters.filter((w) => w !== waiter);
-      waiter.resolve(line);
-    }
-  }
-}
-
-async function readLoop(reader) {
-  const decoder = new TextDecoder();
-  try {
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      lineBuffer += decoder.decode(value, { stream: true });
-      let idx;
-      while ((idx = lineBuffer.indexOf("\n")) >= 0) {
-        const line = lineBuffer.slice(0, idx).replace(/\r$/, "");
-        lineBuffer = lineBuffer.slice(idx + 1);
-        if (line) dispatchLine(line);
-      }
-    }
-  } catch (error) {
-    writeLog(`serial read ended: ${error.message}`);
-  }
-}
-
-async function sendCommand(command, { expect, timeoutMs } = {}) {
+// Send a command as a feature report, then poll until a terminal (non-PENDING)
+// response comes back. The device rejects a new command while one is pending,
+// so callers must await this before sending the next.
+async function sendCommand(command, { timeoutMs = 8000 } = {}) {
   writeLog(`→ ${command}`);
-  await writer.write(new TextEncoder().encode(`${command}\r\n`));
-  if (!expect) return null;
-  return waitForLine(expect, timeoutMs);
+  const payload = new Uint8Array(REPORT_SIZE);
+  const encoded = new TextEncoder().encode(command);
+  payload.set(encoded.subarray(0, REPORT_SIZE));
+  await device.sendFeatureReport(REPORT_ID, payload);
+
+  const deadline = Date.now() + timeoutMs;
+  await sleep(60);
+  while (Date.now() < deadline) {
+    const view = await device.receiveFeatureReport(REPORT_ID);
+    // receiveFeatureReport includes the report ID as byte 0 in some builds.
+    const body = view.byteLength === REPORT_SIZE + 1
+      ? new DataView(view.buffer, view.byteOffset + 1, REPORT_SIZE)
+      : view;
+    const text = decodeReport(body);
+    if (text && text !== "PENDING" && text !== "IDLE") {
+      writeLog(`← ${text}`);
+      return text;
+    }
+    await sleep(120);
+  }
+  throw new Error("Timed out waiting for the device.");
 }
 
 async function refreshStatus() {
   try {
-    const status = await sendCommand("STATUS", { expect: (l) => /^OK STATUS/.test(l) });
+    const status = await sendCommand("STATUS");
     $("#status").textContent = status.replace(/^OK STATUS /, "");
   } catch { $("#status").textContent = "unavailable"; }
   try {
-    const net = await sendCommand("NET_STATUS", { expect: (l) => /^OK NET_STATUS/.test(l) });
+    const net = await sendCommand("NET_STATUS");
     $("#netstatus").textContent = net.replace(/^OK NET_STATUS /, "");
   } catch { $("#netstatus").textContent = "unavailable"; }
 }
 
 $("#connect").addEventListener("click", async () => {
   try {
-    show("Select the tinyTouch serial port…");
-    port = await navigator.serial.requestPort();
-    await port.open({ baudRate: 115200 });
-    writer = port.writable.getWriter();
-    readLoop(port.readable.getReader());
+    show("Select the tinyTouch device…");
+    const filters = [{ vendorId: USB_VID, productId: USB_PID }];
+    const devices = await navigator.hid.requestDevice({ filters });
+    if (!devices.length) { show("No device selected.", ""); return; }
+    device = devices[0];
+    if (!device.opened) await device.open();
 
-    await sendCommand("PING", { expect: (l) => l === "PONG", timeoutMs: 3000 });
+    const pong = await sendCommand("PING", { timeoutMs: 3000 });
+    if (pong !== "PONG") throw new Error("Unexpected reply: " + pong);
     show("Connected.", "success");
     panel.hidden = false;
     await refreshStatus();
   } catch (error) {
-    show(error.message.includes("PONG") || /Timed out/.test(error.message)
-      ? "No response. Make sure the device is running (not in download mode) and no other app holds the port."
-      : error.message, "error");
+    show(/no device selected|cancelled/i.test(error.message) ? "Connection cancelled." : error.message, "error");
   }
 });
 
 $("#unlock").addEventListener("click", async () => {
   try {
     show("Touch the sensor to unlock configuration…");
-    await sendCommand("CONFIG_UNLOCK", {
-      expect: (l) => /^OK CONFIG_UNLOCK/.test(l) || /^ERR CONFIG_UNLOCK/.test(l),
-      timeoutMs: 30000,
-    }).then((line) => {
-      if (line.startsWith("ERR")) throw new Error("Fingerprint not recognized.");
-    });
+    const line = await sendCommand("CONFIG_UNLOCK", { timeoutMs: 30000 });
+    if (line.startsWith("ERR")) throw new Error("Fingerprint not recognized.");
     show("Configuration unlocked for 120 seconds.", "success");
     controls.disabled = false;
   } catch (error) {
@@ -154,12 +138,9 @@ const actions = {
 
 controls.addEventListener("click", async (event) => {
   const button = event.target.closest("button[data-cmd]");
-  if (!button) return;
+  if (!button || !actions[button.dataset.cmd]) return;
   try {
-    const command = actions[button.dataset.cmd]();
-    const response = await sendCommand(command, {
-      expect: (l) => /^OK /.test(l) || /^ERR /.test(l),
-    });
+    const response = await sendCommand(actions[button.dataset.cmd]());
     if (response.startsWith("ERR")) {
       show(response, "error");
     } else {
@@ -172,42 +153,35 @@ controls.addEventListener("click", async (event) => {
 });
 
 
-// Firmware flashing: reboot the running device into ROM download mode via the
-// BOOTLOADER console command, let it re-enumerate, then drive esptool-js to
-// write a merged image over USB. Replaces device-side OTA entirely, so the
-// firmware carries no TLS/HTTP/OTA stack.
+// Firmware flashing: send BOOTLOADER over the HID config channel to reboot the
+// S3 into ROM download mode, then drive esptool-js over Web Serial to write a
+// merged image. Config uses WebHID; flashing uses Web Serial + the ROM.
 $("#flash-fw").addEventListener("click", async () => {
   const file = $("#fw-file").files[0];
   if (!file) { show("Choose a merged .bin file first.", "error"); return; }
   if (controls.disabled) { show("Unlock configuration first.", "error"); return; }
   try {
     show("Rebooting device into download mode…");
-    await sendCommand("BOOTLOADER", { expect: (l) => /^OK BOOTLOADER/.test(l), timeoutMs: 4000 });
-
-    // The console port drops as the device re-enumerates in download mode.
-    try { await writer.close(); } catch {}
-    try { await port.close(); } catch {}
-    port = null; writer = null;
+    try { await sendCommand("BOOTLOADER", { timeoutMs: 4000 }); } catch {}
+    // Device re-enumerates in download mode; the HID handle is now stale.
+    try { if (device && device.opened) await device.close(); } catch {}
+    device = null;
 
     show("Select the device again (now in download mode)…");
     const dlPort = await navigator.serial.requestPort();
     const transport = new Transport(dlPort, false);
-    const terminal = { clean(){}, write:writeLog, writeLine:writeLog };
+    const terminal = { clean(){}, write: writeLog, writeLine: writeLog };
     const loader = new ESPLoader({ transport, baudrate: 460800, terminal, debugLogging: false });
     await loader.main("no_reset");
 
-    const buffer = await file.arrayBuffer();
+    const bytes = new Uint8Array(await file.arrayBuffer());
     let binary = "";
-    const bytes = new Uint8Array(buffer);
     for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
 
-    const wrap = $("#flash-progress");
-    wrap.hidden = false;
+    $("#flash-progress").hidden = false;
     await loader.writeFlash({
       fileArray: [{ data: binary, address: 0 }],
-      flashSize: "keep",
-      eraseAll: false,
-      compress: true,
+      flashSize: "keep", eraseAll: false, compress: true,
       reportProgress: (_i, written, total) => {
         const pct = Math.round((written / total) * 100);
         $("#flash-bar").value = pct;

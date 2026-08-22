@@ -46,10 +46,10 @@ static bool wait_hid_ready(void) {
 static bool send_key(uint8_t modifier, uint8_t key) {
   uint8_t report[6] = {key, 0, 0, 0, 0, 0};
   if (!wait_hid_ready()) return false;
-  if (!tud_hid_keyboard_report(0, modifier, report)) return false;
+  if (!tud_hid_keyboard_report(HID_REPORT_ID_KEYBOARD, modifier, report)) return false;
   vTaskDelay(pdMS_TO_TICKS(7));
   if (!wait_hid_ready()) return false;
-  if (!tud_hid_keyboard_report(0, 0, NULL)) return false;
+  if (!tud_hid_keyboard_report(HID_REPORT_ID_KEYBOARD, 0, NULL)) return false;
   vTaskDelay(pdMS_TO_TICKS(7));
   return true;
 }
@@ -321,7 +321,7 @@ static void touch_hid_task(void *arg) {
 
   while (true) {
     if (hid_needs_release && tud_hid_ready()) {
-      tud_hid_keyboard_report(0, 0, NULL);
+      tud_hid_keyboard_report(HID_REPORT_ID_KEYBOARD, 0, NULL);
       hid_needs_release = false;
     }
     TickType_t now = xTaskGetTickCount();
@@ -397,10 +397,12 @@ uint16_t tud_hid_get_report_cb(uint8_t instance, uint8_t report_id,
                                hid_report_type_t report_type, uint8_t *buffer,
                                uint16_t reqlen) {
   (void)instance;
-  (void)report_id;
-  (void)report_type;
-  (void)buffer;
-  (void)reqlen;
+  if (report_type == HID_REPORT_TYPE_FEATURE && report_id == HID_REPORT_ID_CONFIG) {
+    size_t cap = reqlen < HID_CONFIG_REPORT_SIZE ? reqlen : HID_CONFIG_REPORT_SIZE;
+    size_t n = config_hid_read_response(buffer, cap + 1);
+    if (n < cap) buffer[n] = 0;
+    return cap;
+  }
   return 0;
 }
 
@@ -408,8 +410,7 @@ void tud_hid_set_report_cb(uint8_t instance, uint8_t report_id,
                            hid_report_type_t report_type,
                            uint8_t const *buffer, uint16_t bufsize) {
   (void)instance;
-  (void)report_id;
-  (void)report_type;
-  (void)buffer;
-  (void)bufsize;
+  if (report_type == HID_REPORT_TYPE_FEATURE && report_id == HID_REPORT_ID_CONFIG) {
+    config_hid_on_command(buffer, bufsize);
+  }
 }
