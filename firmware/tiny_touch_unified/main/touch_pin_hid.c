@@ -264,7 +264,7 @@ static bool request_and_type_password(void) {
     bytes_to_hex(event_mac, sizeof(event_mac), mac_hex);
     snprintf(event, sizeof(event), "EV %s %lu 1 1 %s", nonce,
              (unsigned long)event_counter, mac_hex);
-    config_console_send_line(event);
+    config_console_send_helper_line(event);
     if (xQueueReceive(password_responses, response, pdMS_TO_TICKS(6000)) != pdTRUE ||
         !decrypt_password(pairing_key, nonce, response, password, &password_length)) goto done;
   } else {
@@ -286,7 +286,7 @@ static bool request_and_type_password(void) {
       secure_wipe(&host, sizeof(host));
     }
     if (used <= 0 || used >= sizeof(event)) goto done;
-    config_console_send_line(event);
+    config_console_send_helper_line(event);
     if (xQueueReceive(password_responses, response, pdMS_TO_TICKS(1500)) == pdTRUE &&
         decrypt_password_v2(nonce, response, password, &password_length)) {
       result = type_ascii(password, password_length);
@@ -299,7 +299,7 @@ static bool request_and_type_password(void) {
     bytes_to_hex(event_mac, sizeof(event_mac), mac_hex);
     snprintf(event, sizeof(event), "EV %s %lu 1 1 %s", nonce,
              (unsigned long)event_counter, mac_hex);
-    config_console_send_line(event);
+    config_console_send_helper_line(event);
     if (xQueueReceive(password_responses, response, pdMS_TO_TICKS(4500)) != pdTRUE ||
         !decrypt_password(pairing_key, nonce, response, password, &password_length)) goto done;
   }

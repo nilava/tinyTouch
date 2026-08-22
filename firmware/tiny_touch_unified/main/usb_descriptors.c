@@ -10,17 +10,25 @@
 
 #define ITF_NUM_CCID 0
 #define ITF_NUM_HID 1
-#define ITF_NUM_CDC 2
-#define ITF_NUM_CDC_DATA 3
-#define ITF_NUM_TOTAL 4
+// CDC instance 0 = helper channel (EV/PW). CDC instance 1 = config console.
+// Two separate serial interfaces let the macOS helper and the browser each hold
+// their own port, so they never contend for a single one.
+#define ITF_NUM_CDC0 2
+#define ITF_NUM_CDC0_DATA 3
+#define ITF_NUM_CDC1 4
+#define ITF_NUM_CDC1_DATA 5
+#define ITF_NUM_TOTAL 6
 
 #define EPNUM_CCID_OUT 0x01
 #define EPNUM_CCID_IN 0x81
 #define EPNUM_HID 0x82
-#define EPNUM_CDC_NOTIF 0x83
-#define EPNUM_CDC_OUT 0x04
-#define EPNUM_CDC_IN 0x84
-#define CONFIG_TOTAL_LEN (TUD_CONFIG_DESC_LEN + 9 + 54 + 7 + 7 + TUD_HID_DESC_LEN + TUD_CDC_DESC_LEN)
+#define EPNUM_CDC0_NOTIF 0x83
+#define EPNUM_CDC0_OUT 0x04
+#define EPNUM_CDC0_IN 0x84
+#define EPNUM_CDC1_NOTIF 0x85
+#define EPNUM_CDC1_OUT 0x06
+#define EPNUM_CDC1_IN 0x86
+#define CONFIG_TOTAL_LEN (TUD_CONFIG_DESC_LEN + 9 + 54 + 7 + 7 + TUD_HID_DESC_LEN + 2 * TUD_CDC_DESC_LEN)
 
 uint8_t const tiny_touch_hid_report_descriptor[] = {
   TUD_HID_REPORT_DESC_KEYBOARD()
@@ -75,8 +83,10 @@ const uint8_t tiny_touch_fs_configuration_descriptor[] = {
   TUD_HID_DESCRIPTOR(ITF_NUM_HID, 0, HID_ITF_PROTOCOL_KEYBOARD,
                      sizeof(tiny_touch_hid_report_descriptor), EPNUM_HID, 8, 10),
 
-  TUD_CDC_DESCRIPTOR(ITF_NUM_CDC, 0, EPNUM_CDC_NOTIF, 8,
-                     EPNUM_CDC_OUT, EPNUM_CDC_IN, 64),
+  TUD_CDC_DESCRIPTOR(ITF_NUM_CDC0, 4, EPNUM_CDC0_NOTIF, 8,
+                     EPNUM_CDC0_OUT, EPNUM_CDC0_IN, 64),
+  TUD_CDC_DESCRIPTOR(ITF_NUM_CDC1, 5, EPNUM_CDC1_NOTIF, 8,
+                     EPNUM_CDC1_OUT, EPNUM_CDC1_IN, 64),
 };
 
 static char tiny_touch_serial[20] = "TT-PIV-PROTOTYPE";
@@ -86,6 +96,8 @@ char const *tiny_touch_string_descriptors[] = {
   "tinyTouch",
   "tinyTouch",
   tiny_touch_serial,
+  "tinyTouch helper",
+  "tinyTouch config",
 };
 
 const int tiny_touch_string_descriptor_count =
