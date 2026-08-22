@@ -385,7 +385,13 @@ static void handle_command(void) {
   } else if (strcmp(command, "BLE_STATUS") == 0) {
     char ble[160];
     ble_hid_status(ble, sizeof(ble));
-    snprintf(line, sizeof(line), "OK BLE_STATUS %s", ble);
+    nvs_stats_t st;
+    if (nvs_get_stats(NULL, &st) == ESP_OK) {
+      snprintf(line, sizeof(line), "OK BLE_STATUS %s nvsfree=%d/%d",
+               ble, (int)st.free_entries, (int)st.total_entries);
+    } else {
+      snprintf(line, sizeof(line), "OK BLE_STATUS %s", ble);
+    }
     send_line(line);
   } else if (strcmp(command, "NET_STATUS") == 0) {
     char net[128];
