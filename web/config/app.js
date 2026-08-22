@@ -93,6 +93,14 @@ $("#connect").addEventListener("click", async () => {
     device = devices[0];
     if (!device.opened) await device.open();
 
+    // Diagnostic: log the feature reports Chrome parsed, so a write failure is
+    // debuggable (report ID mismatch vs. transport error).
+    try {
+      const feats = (device.collections || []).flatMap((c) =>
+        (c.featureReports || []).map((r) => `id=${r.reportId} usagePage=0x${(c.usagePage||0).toString(16)}`));
+      writeLog(`feature reports: ${feats.join(", ") || "none"}`);
+    } catch {}
+
     const pong = await sendCommand("PING", { timeoutMs: 3000 });
     if (pong !== "PONG") throw new Error("Unexpected reply: " + pong);
     show("Connected.", "success");
