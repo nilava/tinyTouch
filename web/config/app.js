@@ -38,9 +38,39 @@ if (!hidSupported) {
   $("#connect").disabled = true;
 }
 
+const toasts = $("#toasts");
+function toast(text, kind = "info") {
+  const el = document.createElement("div");
+  el.className = `toast ${kind}`;
+  const icon = kind === "success" ? "✓" : kind === "error" ? "✕" : "i";
+  el.innerHTML = `<span class="ic">${icon}</span><span></span>`;
+  el.lastChild.textContent = text;
+  toasts.appendChild(el);
+  setTimeout(() => { el.classList.add("out"); setTimeout(() => el.remove(), 220); }, 3200);
+}
+// Pre-connect hint line only; all action feedback goes through toasts.
 function show(text, kind = "") {
-  message.textContent = text;
-  message.className = `message ${kind}`.trim();
+  if (kind) { toast(text, kind === "success" ? "success" : "error"); }
+  else if (message) message.textContent = text;
+}
+// Run an async action with inline button feedback (spinner -> Saved/Failed).
+async function withButton(button, fn, okLabel = "Saved") {
+  if (!button) return fn();
+  const original = button.textContent;
+  button.disabled = true;
+  button.innerHTML = '<span class="spinner"></span>';
+  try {
+    const r = await fn();
+    button.classList.add("saved");
+    button.textContent = okLabel + " ✓";
+    setTimeout(() => { button.classList.remove("saved"); button.textContent = original; button.disabled = false; }, 1600);
+    return r;
+  } catch (e) {
+    button.classList.add("failed");
+    button.textContent = "Failed";
+    setTimeout(() => { button.classList.remove("failed"); button.textContent = original; button.disabled = false; }, 1800);
+    throw e;
+  }
 }
 function writeLog(value) {
   const line = String(value).trim();
@@ -193,14 +223,16 @@ $("#connect").addEventListener("click", async () => {
 });
 
 $("#unlock").addEventListener("click", async () => {
+  const ubtn = $("#unlock");
   try {
-    show("Touch the sensor to unlock configuration…");
+    toast("Touch the sensor to unlock…", "info");
     const line = await sendCommand("CONFIG_UNLOCK", { timeoutMs: 30000 });
     if (line.startsWith("ERR")) throw new Error("Fingerprint not recognized.");
-    show("Configuration unlocked for 120 seconds.", "success");
+    toast("Unlocked for 120 seconds", "success");
     controls.disabled = false;
     lockbar.classList.add("unlocked");
     lockText.textContent = "🔓 Unlocked — settings can be changed for 120s";
+    ubtn.textContent = "Re-unlock";
   } catch (error) {
     show(error.message, "error");
   }
@@ -233,33 +265,53 @@ const actions = {
   reboot: () => "REBOOT",
 };
 
+const OK_LABELS = { reboot: "Rebooting", "ble-enable": "Saved", pin: "Set" };
 controls.addEventListener("click", async (event) => {
   const button = event.target.closest("button[data-cmd]");
   if (!button || !actions[button.dataset.cmd]) return;
+  const cmd = button.dataset.cmd;
   try {
-    const response = await sendCommand(actions[button.dataset.cmd]());
-    if (response.startsWith("ERR")) {
-      show(response, "error");
-    } else {
-      show(response, "success");
-      if (button.dataset.cmd !== "reboot") await refreshStatus();
-    }
+    await withButton(button, async () => {
+      const response = await sendCommand(actions[cmd]());
+      if (response.startsWith("ERR")) throw new Error(friendlyError(cmd, response));
+      return response;
+    }, OK_LABELS[cmd] || "Saved");
+    toast(successMessage(cmd), "success");
+    if (cmd !== "reboot") await refreshStatus();
   } catch (error) {
-    show(error.message, "error");
+    toast(error.message, "error");
   }
 });
+
+function successMessage(cmd) {
+  return {
+    wifi: "Wi-Fi saved — reboot to connect",
+    mqtt: "MQTT broker saved — reboot to connect",
+    pin: "PIN updated",
+    duress: "Duress slot saved",
+    reboot: "Device rebooting…",
+    "ble-enable": "BLE setting saved — reboot to apply",
+    "ble-slot": "BLE trigger slot saved",
+    "ble-text": "BLE text saved",
+  }[cmd] || "Saved";
+}
+function friendlyError(cmd, resp) {
+  if (/format/.test(resp) && cmd === "pin") return "PIN must be 6–8 digits.";
+  if (/too_long/.test(resp)) return "That value is too long.";
+  return resp.replace(/^ERR \S+ ?/, "") || "The device rejected that.";
+}
 
 
 // Mode segmented control: send MODE and reflect the new active state.
 document.querySelectorAll("#mode-seg button").forEach((btn) => {
   btn.addEventListener("click", async () => {
-    if (controls.disabled) { show("Unlock configuration first.", "error"); return; }
+    if (controls.disabled) { toast("Unlock configuration first.", "error"); return; }
     try {
       const resp = await sendCommand(`MODE ${btn.dataset.mode}`);
-      if (resp.startsWith("ERR")) { show(resp, "error"); return; }
-      show(resp, "success");
+      if (resp.startsWith("ERR")) { toast("Could not switch mode.", "error"); return; }
+      toast(`Switched to ${btn.dataset.mode === "hid" ? "HID password" : "PIV smartcard"} mode`, "success");
       await refreshStatus();
-    } catch (e) { show(e.message, "error"); }
+    } catch (e) { toast(e.message, "error"); }
   });
 });
 

@@ -5,12 +5,13 @@
 <main class="page">
   <a class="back" href="/tinytouch/">← tinyTouch</a>
   <div class="topbar">
-    <h1>Configure tinyTouch</h1>
+    <h1>tinyTouch</h1>
     <span id="conn-pill" class="pill"><span class="dot"></span><span id="conn-text">Disconnected</span></span>
   </div>
+  <p class="subtitle">Device configuration</p>
 
-  <div id="message" class="message" role="status">Connect your device to begin. Chrome or Edge required.</div>
   <button id="connect" class="btn primary block">Connect device</button>
+  <p id="message" class="hint">Chrome or Edge required. Keep the device plugged in.</p>
 
   <section id="panel" hidden>
     <div class="summary" id="summary">
@@ -87,6 +88,7 @@
     </fieldset>
   </section>
 
+  <div id="toasts"></div>
   <p id="browser-note" class="note"></p>
   <details><summary>Activity log</summary><pre id="log" hidden>No device activity yet.</pre></details>
 </main>
