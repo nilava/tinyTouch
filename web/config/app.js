@@ -101,6 +101,16 @@ $("#connect").addEventListener("click", async () => {
       writeLog(`feature reports: ${feats.join(", ") || "none"}`);
     } catch {}
 
+    // Probe READ independently of WRITE. If read works but write fails, macOS is
+    // blocking SetReport to this device (it also presents a keyboard) — a WebHID
+    // platform limitation, not a firmware bug.
+    try {
+      const v = await device.receiveFeatureReport(REPORT_ID);
+      writeLog(`read probe OK: ${v.byteLength} bytes ("${decodeReport(v.byteLength === REPORT_SIZE + 1 ? new DataView(v.buffer, v.byteOffset + 1, REPORT_SIZE) : v)}")`);
+    } catch (e) {
+      writeLog(`read probe FAILED: ${e.message}`);
+    }
+
     const pong = await sendCommand("PING", { timeoutMs: 3000 });
     if (pong !== "PONG") throw new Error("Unexpected reply: " + pong);
     show("Connected.", "success");
