@@ -313,25 +313,6 @@ def open_serial(port: str) -> serial.Serial:
     return ser
 
 
-def is_console_port(port: str) -> bool:
-    # tinyTouch exposes two CDC serial ports: the config console (answers PING
-    # with PONG) and this helper channel (silent to PING). The helper must not
-    # hold the console port, or the browser config page can never open it.
-    try:
-        with open_serial(port) as ser:
-            ser.reset_input_buffer()
-            ser.write(b"PING\r\n")
-            ser.flush()
-            deadline = time.time() + 0.6
-            while time.time() < deadline:
-                line = ser.readline()
-                if line and line.strip() == b"PONG":
-                    return True
-    except (OSError, serial.SerialException):
-        pass
-    return False
-
-
 def serve_port(port: str, once: bool = False) -> None:
     device_id = port_identity(port)
     password = keychain_get(device_id)
@@ -391,24 +372,16 @@ def credentials_exist(device_id: str) -> bool:
 
 def run_manager() -> None:
     workers: dict[str, threading.Thread] = {}
-    console_ports: set[str] = set()  # cached so we never re-probe (and re-open) them
     while True:
         for port, worker in list(workers.items()):
             if not worker.is_alive():
                 worker.join()
                 del workers[port]
-        present = set(device_ports())
-        console_ports &= present  # forget ports that were unplugged
-        for port in present:
-            if port in workers or port in console_ports:
+        for port in device_ports():
+            if port in workers:
                 continue
             device_id = port_identity(port)
             if not credentials_exist(device_id):
-                continue
-            if is_console_port(port):
-                # Leave the config console free for the web config page, and
-                # remember it so we don't reopen it on every manager tick.
-                console_ports.add(port)
                 continue
             worker = threading.Thread(target=managed_worker, args=(port,), daemon=True,
                                       name=f"tinyTouch-{device_id}")

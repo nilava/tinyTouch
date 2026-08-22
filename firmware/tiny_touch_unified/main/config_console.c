@@ -29,11 +29,6 @@
 #define TINYTOUCH_PROTOCOL_VERSION 1
 #endif
 
-// CDC instance 0 carries the helper EV/PW exchange; instance 1 the config
-// console. See usb_descriptors.c.
-#define HELPER_CDC 0
-#define CONSOLE_CDC 1
-
 static char command[640];
 static size_t command_len;
 static SemaphoreHandle_t cdc_write_mutex;
@@ -49,7 +44,7 @@ static provision_buffer_t provision_key9a;
 static provision_buffer_t provision_cert9d;
 static provision_buffer_t provision_key9d;
 
-static void cdc_send_line(uint8_t itf, const char *line) {
+void config_console_send_line(const char *line) {
   if (cdc_write_mutex) xSemaphoreTake(cdc_write_mutex, portMAX_DELAY);
   const char *parts[] = {line, "\r\n"};
   for (size_t part = 0; part < 2; part++) {
@@ -58,22 +53,14 @@ static void cdc_send_line(uint8_t itf, const char *line) {
     TickType_t started = xTaskGetTickCount();
     while (offset < length &&
            (xTaskGetTickCount() - started) < pdMS_TO_TICKS(2000)) {
-      uint32_t written = tud_cdc_n_write(itf, parts[part] + offset, length - offset);
+      uint32_t written = tud_cdc_write(parts[part] + offset, length - offset);
       offset += written;
-      tud_cdc_n_write_flush(itf);
+      tud_cdc_write_flush();
       if (offset < length) vTaskDelay(pdMS_TO_TICKS(2));
     }
   }
-  tud_cdc_n_write_flush(itf);
+  tud_cdc_write_flush();
   if (cdc_write_mutex) xSemaphoreGive(cdc_write_mutex);
-}
-
-void config_console_send_line(const char *line) {
-  cdc_send_line(CONSOLE_CDC, line);
-}
-
-void config_console_send_helper_line(const char *line) {
-  cdc_send_line(HELPER_CDC, line);
 }
 
 static void send_line(const char *line) {
@@ -433,39 +420,25 @@ static void handle_command(void) {
   }
 }
 
-static char helper_line[640];
-static size_t helper_line_len;
-
 static void console_task(void *arg) {
   (void)arg;
   while (true) {
-    // Config console commands arrive on the console CDC.
-    while (tud_cdc_n_available(CONSOLE_CDC)) {
+    while (tud_cdc_available()) {
       char c;
-      if (tud_cdc_n_read(CONSOLE_CDC, &c, 1) != 1) break;
+      if (tud_cdc_read(&c, 1) != 1) break;
       if (c == '\r') continue;
       if (c == '\n') {
         command[command_len] = '\0';
-        if (command_len) handle_command();
+        if (command_len) {
+          if (strncmp(command, "PW ", 3) == 0 || strncmp(command, "PW2 ", 4) == 0) {
+            touch_pin_hid_submit_response(command);
+          } else {
+            handle_command();
+          }
+        }
         command_len = 0;
       } else if (command_len + 1 < sizeof(command)) {
         command[command_len++] = c;
-      }
-    }
-    // Helper PW/PW2 responses arrive on the helper CDC.
-    while (tud_cdc_n_available(HELPER_CDC)) {
-      char c;
-      if (tud_cdc_n_read(HELPER_CDC, &c, 1) != 1) break;
-      if (c == '\r') continue;
-      if (c == '\n') {
-        helper_line[helper_line_len] = '\0';
-        if (helper_line_len &&
-            (strncmp(helper_line, "PW ", 3) == 0 || strncmp(helper_line, "PW2 ", 4) == 0)) {
-          touch_pin_hid_submit_response(helper_line);
-        }
-        helper_line_len = 0;
-      } else if (helper_line_len + 1 < sizeof(helper_line)) {
-        helper_line[helper_line_len++] = c;
       }
     }
     vTaskDelay(pdMS_TO_TICKS(10));

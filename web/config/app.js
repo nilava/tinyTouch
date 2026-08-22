@@ -104,22 +104,13 @@ $("#connect").addEventListener("click", async () => {
     writer = port.writable.getWriter();
     readLoop(port.readable.getReader());
 
-    try {
-      await sendCommand("PING", { expect: (l) => l === "PONG", timeoutMs: 3000 });
-    } catch {
-      // tinyTouch exposes two serial ports: a config console (answers PING) and
-      // a helper channel (silent). A timeout almost always means the wrong one.
-      try { await writer.close(); } catch {}
-      try { await port.close(); } catch {}
-      port = null; writer = null;
-      throw new Error("That port didn't respond. tinyTouch has two ports — reconnect and pick the other (the \"config\" one).");
-    }
+    await sendCommand("PING", { expect: (l) => l === "PONG", timeoutMs: 3000 });
     show("Connected.", "success");
     panel.hidden = false;
     await refreshStatus();
   } catch (error) {
-    show(/no port selected|cancelled/i.test(error.message)
-      ? "Connection cancelled."
+    show(error.message.includes("PONG") || /Timed out/.test(error.message)
+      ? "No response. Make sure the device is running (not in download mode) and no other app holds the port."
       : error.message, "error");
   }
 });
