@@ -278,9 +278,10 @@ const actions = {
   },
   reboot: () => "REBOOT",
   bootloader: () => "BOOTLOADER",
+  "ble-start": () => "BLE_START",
 };
 
-const OK_LABELS = { reboot: "Rebooting", "ble-enable": "Saved", pin: "Set" };
+const OK_LABELS = { reboot: "Rebooting", "ble-enable": "Saved", pin: "Set", "ble-start": "Pairing" };
 controls.addEventListener("click", async (event) => {
   const button = event.target.closest("button[data-cmd]");
   if (!button || !actions[button.dataset.cmd]) return;
@@ -317,6 +318,7 @@ function successMessage(cmd) {
     "ble-enable": "BLE setting saved — reboot to apply",
     "ble-slot": "BLE trigger slot saved",
     "ble-text": "BLE text saved",
+    "ble-start": "Pairing mode on — open Bluetooth on your iPad/phone",
   }[cmd] || "Saved";
 }
 function friendlyError(cmd, resp) {

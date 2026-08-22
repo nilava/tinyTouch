@@ -4,6 +4,7 @@
 
 #include "esp_hidd.h"
 #include "esp_hid_gap.h"
+#include "esp_event.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -123,6 +124,13 @@ static bool save_u8(const char *key, uint8_t value) {
 
 static void start_stack(void) {
   if (started || !cfg_enabled) return;
+  // BLE/Bluedroid needs the default event loop. net.c only creates it when
+  // Wi-Fi is configured, so create it here too (harmless if already present).
+  esp_err_t loop = esp_event_loop_create_default();
+  if (loop != ESP_OK && loop != ESP_ERR_INVALID_STATE) {
+    ESP_LOGE(TAG, "event loop init failed: 0x%x", loop);
+    return;
+  }
   if (esp_hid_gap_init(HID_DEV_MODE) != ESP_OK) { ESP_LOGE(TAG, "gap init failed"); return; }
   if (esp_hid_ble_gap_adv_init(ESP_HID_APPEARANCE_KEYBOARD, hid_config.device_name) != ESP_OK) {
     ESP_LOGE(TAG, "adv init failed");
@@ -174,6 +182,13 @@ bool ble_hid_type_credential(void) {
   if (!connected || cfg_text[0] == '\0') return false;
   for (const char *p = cfg_text; *p; p++) type_char(*p);
   return true;
+}
+
+bool ble_hid_start_pairing(void) {
+  if (!cfg_enabled) return false;
+  if (!started) start_stack();
+  if (started) esp_hid_ble_gap_adv_start();
+  return started;
 }
 
 void ble_hid_status(char *out, size_t cap) {

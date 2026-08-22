@@ -379,6 +379,9 @@ static void handle_command(void) {
   } else if (strncmp(command, "BLE_TEXT ", 9) == 0) {
     if (!require_config_authorization()) return;
     send_line(ble_hid_set_text(command + 9) ? "OK BLE_TEXT" : "ERR BLE_TEXT too_long");
+  } else if (strcmp(command, "BLE_START") == 0) {
+    if (!require_config_authorization()) return;
+    send_line(ble_hid_start_pairing() ? "OK BLE_START advertising" : "ERR BLE_START enable_first");
   } else if (strcmp(command, "BLE_STATUS") == 0) {
     char ble[160];
     ble_hid_status(ble, sizeof(ble));
