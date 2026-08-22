@@ -8,6 +8,7 @@
 static device_mode_t current_mode = DEVICE_MODE_PIV;
 static device_hid_host_t hid_hosts[DEVICE_CONFIG_MAX_HID_HOSTS];
 static size_t hid_host_count;
+static uint8_t duress_slot = 5;
 
 static void derive_key_id(const uint8_t key[32], uint8_t id[DEVICE_CONFIG_HID_KEY_ID_SIZE]) {
   uint8_t digest[32];
@@ -36,6 +37,7 @@ void device_config_reload(void) {
   current_mode = DEVICE_MODE_PIV;
   memset(hid_hosts, 0, sizeof(hid_hosts));
   hid_host_count = 0;
+  duress_slot = 5;
 
   nvs_handle_t handle;
   if (nvs_open("device", NVS_READONLY, &handle) != ESP_OK) return;
@@ -44,6 +46,11 @@ void device_config_reload(void) {
   if (nvs_get_u8(handle, "mode", &stored_mode) == ESP_OK &&
       stored_mode <= DEVICE_MODE_HID) {
     current_mode = (device_mode_t)stored_mode;
+  }
+
+  uint8_t stored_duress = 5;
+  if (nvs_get_u8(handle, "duress", &stored_duress) == ESP_OK && stored_duress <= 5) {
+    duress_slot = stored_duress;
   }
 
   size_t hosts_length = sizeof(hid_hosts);
@@ -186,4 +193,19 @@ bool device_config_remove_hid_host(const uint8_t id[DEVICE_CONFIG_HID_KEY_ID_SIZ
     return false;
   }
   return false;
+}
+
+uint8_t device_config_duress_slot(void) {
+  return duress_slot;
+}
+
+bool device_config_set_duress_slot(uint8_t slot) {
+  if (slot > 5) return false;
+  nvs_handle_t handle;
+  if (nvs_open("device", NVS_READWRITE, &handle) != ESP_OK) return false;
+  esp_err_t result = nvs_set_u8(handle, "duress", slot);
+  if (result == ESP_OK) result = nvs_commit(handle);
+  nvs_close(handle);
+  if (result == ESP_OK) duress_slot = slot;
+  return result == ESP_OK;
 }

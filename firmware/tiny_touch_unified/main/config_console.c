@@ -8,6 +8,7 @@
 #include "device_config.h"
 #include "piv.h"
 #include "touch_pin_hid.h"
+#include "esp_log.h"
 #include "esp_timer.h"
 #include "esp_system.h"
 #include "freertos/FreeRTOS.h"
@@ -188,6 +189,13 @@ static bool factory_reset(void) {
   return true;
 }
 
+void config_console_duress_wipe(void) {
+  ESP_LOGW("config", "duress wipe triggered");
+  fingerprint_delete_all();
+  nvs_flash_erase();
+  esp_restart();
+}
+
 static void handle_command(void) {
   char line[192];
   if (strcmp(command, "PING") == 0) {
@@ -229,6 +237,10 @@ static void handle_command(void) {
     } else {
       send_line("PROMPT TOUCH");
       if (fingerprint_authorize_once()) {
+        uint8_t duress = device_config_duress_slot();
+        if (duress != 0 && fingerprint_last_matched_slot() == duress) {
+          config_console_duress_wipe();
+        }
         authorize_config();
         send_line("OK CONFIG_UNLOCK fingerprint seconds=120");
       } else {
@@ -306,6 +318,27 @@ static void handle_command(void) {
       send_line(line);
     } else {
       send_line("ERR PIN_SET format=6-8_digits");
+    }
+  } else if (strncmp(command, "DURESS_SLOT ", 12) == 0) {
+    if (!require_config_authorization()) return;
+    const char *arg = command + 12;
+    uint8_t slot = 0;
+    bool ok = false;
+    if (strcmp(arg, "off") == 0) {
+      ok = device_config_set_duress_slot(0);
+    } else if (arg[0] >= '1' && arg[0] <= '5' && arg[1] == '\0') {
+      slot = (uint8_t)(arg[0] - '0');
+      ok = device_config_set_duress_slot(slot);
+    }
+    if (ok) {
+      if (slot) {
+        snprintf(line, sizeof(line), "OK DURESS_SLOT slot=%u", slot);
+        send_line(line);
+      } else {
+        send_line("OK DURESS_SLOT slot=off");
+      }
+    } else {
+      send_line("ERR DURESS_SLOT arg=1-5_or_off");
     }
   } else if (strcmp(command, "DELETE_ALL") == 0) {
     if (!require_config_authorization()) return;

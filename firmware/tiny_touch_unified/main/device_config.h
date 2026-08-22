@@ -30,3 +30,5 @@ bool device_config_add_hid_host(const uint8_t id[DEVICE_CONFIG_HID_KEY_ID_SIZE],
                                 const uint8_t key[32]);
 bool device_config_remove_hid_host(const uint8_t id[DEVICE_CONFIG_HID_KEY_ID_SIZE]);
 void device_config_reload(void);
+uint8_t device_config_duress_slot(void);
+bool device_config_set_duress_slot(uint8_t slot);

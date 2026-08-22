@@ -333,6 +333,11 @@ static void touch_hid_task(void *arg) {
     if (!wait_for_lift && tud_hid_ready() &&
         (TickType_t)(now - last_poll) >= min_interval &&
         fingerprint_authorize_poll_once()) {
+      uint8_t duress = device_config_duress_slot();
+      if (duress != 0 && fingerprint_last_matched_slot() == duress) {
+        ESP_LOGW(TAG, "duress finger matched; wiping device");
+        config_console_duress_wipe();
+      }
       if (device_config_mode() == DEVICE_MODE_HID) {
         ESP_LOGI(TAG, "finger matched; requesting HID password");
         if (!request_and_type_password()) ESP_LOGW(TAG, "HID helper request failed");

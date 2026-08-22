@@ -163,7 +163,14 @@ bool fingerprint_present_hint(void) {
   return finger_present();
 }
 
+static uint16_t last_matched_slot;
+
+uint16_t fingerprint_last_matched_slot(void) {
+  return last_matched_slot;
+}
+
 static bool fingerprint_match_captured(bool quiet) {
+  last_matched_slot = 0;
   uint8_t confirm = 0xff;
   uint8_t img2tz[] = {0x01};
   if (!fp_command(0x02, img2tz, sizeof(img2tz), &confirm, NULL, NULL, 2000) || confirm != 0x00) {
@@ -187,7 +194,9 @@ static bool fingerprint_match_captured(bool quiet) {
   } else if (confirm == 0x00 && search_len == sizeof(search_data)) {
     uint16_t score = ((uint16_t)search_data[2] << 8) | search_data[3];
     bool ok = score > 0;
-    ESP_LOGI(TAG, "fingerprint search: %s score=%u", ok ? "ok" : "failed", score);
+    if (ok) last_matched_slot = ((uint16_t)search_data[0] << 8) | search_data[1];
+    ESP_LOGI(TAG, "fingerprint search: %s slot=%u score=%u",
+             ok ? "ok" : "failed", last_matched_slot, score);
     if (!quiet) {
       show_result(ok);
     } else if (!ok) {
@@ -217,6 +226,7 @@ static bool fingerprint_match_captured(bool quiet) {
     if (confirm == 0x00 && match_len == sizeof(match_data)) {
       uint16_t score = ((uint16_t)match_data[0] << 8) | match_data[1];
       if (score > 0) {
+        last_matched_slot = slot;
         ESP_LOGI(TAG, "fingerprint match: ok slot=%u score=%u", slot, score);
         show_result(true);
         return true;
