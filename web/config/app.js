@@ -24,7 +24,15 @@ function parseKV(text) {
   }
   return out;
 }
+let autoRefreshTimer = null;
+function startAutoRefresh() {
+  stopAutoRefresh();
+  // Light poll so the summary (esp. last-touched slot) stays live.
+  autoRefreshTimer = setInterval(() => { if (device) refreshStatus().catch(() => {}); }, 3000);
+}
+function stopAutoRefresh() { if (autoRefreshTimer) { clearInterval(autoRefreshTimer); autoRefreshTimer = null; } }
 function markDisconnected() {
+  stopAutoRefresh();
   connPill.classList.remove("on"); connText.textContent = "Disconnected";
   controls.disabled = true; lockbar.classList.remove("unlocked");
   device = null;
@@ -162,6 +170,7 @@ async function refreshStatus() {
     setText("#sum-sensor", sensorOk ? "OK" : (s.sensor || "—"));
     setDot("#sd-sensor", sensorOk ? "ok" : "warn");
     setText("#sum-fp", s.fingerprints ?? "—");
+    setText("#sum-last", (s.lastmatch && s.lastmatch !== "0") ? ("slot " + s.lastmatch) : "—");
     // reflect mode in the segmented control
     document.querySelectorAll("#mode-seg button").forEach((b) =>
       b.classList.toggle("active", b.dataset.mode === s.mode));
@@ -230,6 +239,7 @@ $("#connect").addEventListener("click", async () => {
     panel.hidden = false;
     toast("Device connected", "success");
     await refreshStatus();
+    startAutoRefresh();
   } catch (error) {
     cbtn.disabled = false; cbtn.innerHTML = cprev;
     if (!/no device selected|cancelled|null/i.test(error.message || "")) toast(error.message, "error");

@@ -342,10 +342,16 @@ static void touch_hid_task(void *arg) {
       }
       net_publish_event(fingerprint_last_matched_slot(), true);
       uint8_t ble_slot = ble_hid_slot();
-      if (ble_slot != 0 && fingerprint_last_matched_slot() == ble_slot &&
-          ble_hid_connected()) {
-        ESP_LOGI(TAG, "matched BLE slot; typing credential over Bluetooth");
-        ble_hid_type_credential();
+      if (ble_slot != 0 && fingerprint_last_matched_slot() == ble_slot) {
+        // BLE-assigned slot: type only over Bluetooth, NEVER fall through to
+        // USB — otherwise the credential would leak to the Mac when iOS has
+        // idle-disconnected the BLE link.
+        if (ble_hid_connected()) {
+          ESP_LOGI(TAG, "matched BLE slot; typing credential over Bluetooth");
+          ble_hid_type_credential();
+        } else {
+          ESP_LOGW(TAG, "matched BLE slot but no BLE host connected; not typing");
+        }
         last_success = xTaskGetTickCount();
         wait_for_lift = true;
         vTaskDelay(pdMS_TO_TICKS(250));

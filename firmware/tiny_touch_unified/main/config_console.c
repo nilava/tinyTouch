@@ -229,22 +229,22 @@ static void handle_command(void) {
     if (count < 0) {
       snprintf(line, sizeof(line),
                "OK STATUS firmware=unified firmware_version=%s protocol=%d mode=%s "
-               "sensor=no_response fingerprints=unknown keys=%s hid_key=%s hid_hosts=%u",
+               "sensor=no_response fingerprints=unknown keys=%s hid_key=%s hid_hosts=%u lastmatch=%u",
                TINYTOUCH_FIRMWARE_VERSION, TINYTOUCH_PROTOCOL_VERSION,
                device_config_mode_name(),
                piv_uses_provisioned_keys() ? "nvs" : "unconfigured",
                device_config_hid_key_configured() ? "configured" : "unconfigured",
-               (unsigned)device_config_hid_host_count());
+               (unsigned)device_config_hid_host_count(), (unsigned)fingerprint_last_matched_slot());
       send_line(line);
     } else {
       snprintf(line, sizeof(line),
                "OK STATUS firmware=unified firmware_version=%s protocol=%d mode=%s "
-               "sensor=ok fingerprints=%d keys=%s hid_key=%s hid_hosts=%u",
+               "sensor=ok fingerprints=%d keys=%s hid_key=%s hid_hosts=%u lastmatch=%u",
                TINYTOUCH_FIRMWARE_VERSION, TINYTOUCH_PROTOCOL_VERSION,
                device_config_mode_name(), count,
                piv_uses_provisioned_keys() ? "nvs" : "unconfigured",
                device_config_hid_key_configured() ? "configured" : "unconfigured",
-               (unsigned)device_config_hid_host_count());
+               (unsigned)device_config_hid_host_count(), (unsigned)fingerprint_last_matched_slot());
       send_line(line);
     }
   } else if (strcmp(command, "VERSION") == 0) {
