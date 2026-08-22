@@ -653,14 +653,15 @@ esp_err_t esp_hid_ble_gap_adv_init(uint16_t appearance, const char *device_name)
 
     esp_err_t ret;
 
-    const uint8_t hidd_service_uuid128[] = {
-        0xfb, 0x34, 0x9b, 0x5f, 0x80, 0x00, 0x00, 0x80, 0x00, 0x10, 0x00, 0x00, 0x12, 0x18, 0x00, 0x00,
-    };
+    // 16-bit HID service UUID (0x1812). The 128-bit form pushed the advertising
+    // payload past the 31-byte limit, so config_adv_data dropped fields and iOS
+    // never saw the HID UUID or name — the device advertised but was invisible.
+    static uint8_t hidd_service_uuid16[] = { 0x12, 0x18 };
 
     esp_ble_adv_data_t ble_adv_data = {
         .set_scan_rsp = false,
         .include_name = true,
-        .include_txpower = true,
+        .include_txpower = false,
         .min_interval = 0x0006, //slave connection min interval, Time = min_interval * 1.25 msec
         .max_interval = 0x0010, //slave connection max interval, Time = max_interval * 1.25 msec
         .appearance = appearance,
@@ -668,8 +669,8 @@ esp_err_t esp_hid_ble_gap_adv_init(uint16_t appearance, const char *device_name)
         .p_manufacturer_data =  NULL,
         .service_data_len = 0,
         .p_service_data = NULL,
-        .service_uuid_len = sizeof(hidd_service_uuid128),
-        .p_service_uuid = (uint8_t *)hidd_service_uuid128,
+        .service_uuid_len = sizeof(hidd_service_uuid16),
+        .p_service_uuid = hidd_service_uuid16,
         .flag = 0x6,
     };
 
