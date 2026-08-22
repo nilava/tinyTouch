@@ -11,6 +11,7 @@
 #include "touch_pin_hid.h"
 #include "usb_ccid.h"
 #include "net.h"
+#include "ota.h"
 
 #ifdef TINYTOUCH_RECOVERY_BUILD
 static const char *TAG = "tiny_touch";
@@ -81,6 +82,7 @@ void app_main(void) {
   device_config_init();
   piv_init();
   net_init();
+  ota_init();
   usb_ccid_start(piv_handle_apdu);
   config_console_start();
   touch_pin_hid_start();

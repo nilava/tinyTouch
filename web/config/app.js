@@ -146,6 +146,12 @@ const actions = {
     return `PIN_SET ${pin}`;
   },
   duress: () => `DURESS_SLOT ${$("#duress").value}`,
+  "ota-url": () => {
+    const url = $("#ota-url").value.trim();
+    if (!/^https:\/\//.test(url)) throw new Error("Enter an https:// image URL.");
+    return `OTA_URL ${url}`;
+  },
+  "ota-check": () => "OTA_CHECK",
   mode: () => `MODE ${$("#mode").value}`,
   reboot: () => "REBOOT",
 };

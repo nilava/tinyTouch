@@ -7,6 +7,7 @@
 #include "fingerprint.h"
 #include "device_config.h"
 #include "net.h"
+#include "ota.h"
 #include "piv.h"
 #include "touch_pin_hid.h"
 #include "esp_log.h"
@@ -344,6 +345,17 @@ static void handle_command(void) {
     } else {
       send_line("ERR MQTT_SET format=<uri>_<prefix>");
     }
+  } else if (strncmp(command, "OTA_URL ", 8) == 0) {
+    if (!require_config_authorization()) return;
+    send_line(ota_set_url(command + 8) ? "OK OTA_URL" : "ERR OTA_URL format=<https_url>");
+  } else if (strcmp(command, "OTA_CHECK") == 0) {
+    if (!require_config_authorization()) return;
+    send_line(ota_check() ? "OK OTA_CHECK started" : "ERR OTA_CHECK busy_or_unconfigured");
+  } else if (strcmp(command, "OTA_STATUS") == 0) {
+    char ota[96];
+    ota_status(ota, sizeof(ota));
+    snprintf(line, sizeof(line), "OK OTA_STATUS %s", ota);
+    send_line(line);
   } else if (strcmp(command, "NET_STATUS") == 0) {
     char net[128];
     net_status(net, sizeof(net));
