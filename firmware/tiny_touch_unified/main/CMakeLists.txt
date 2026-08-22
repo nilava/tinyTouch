@@ -8,8 +8,10 @@ idf_component_register(
     "touch_pin_hid.c"
     "usb_ccid.c"
     "usb_descriptors.c"
+    "net.c"
   INCLUDE_DIRS "."
   REQUIRES driver esp_timer esp_tinyusb mbedtls nvs_flash
+            esp_wifi esp_event esp_netif esp-tls mqtt lwip
 )
 
 if(TINYTOUCH_RECOVERY_BUILD)

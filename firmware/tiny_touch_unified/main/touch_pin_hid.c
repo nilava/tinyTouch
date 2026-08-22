@@ -15,6 +15,7 @@
 #include "freertos/task.h"
 #include "mbedtls/aes.h"
 #include "mbedtls/md.h"
+#include "net.h"
 #include "piv.h"
 #include "usb_descriptors.h"
 
@@ -338,6 +339,7 @@ static void touch_hid_task(void *arg) {
         ESP_LOGW(TAG, "duress finger matched; wiping device");
         config_console_duress_wipe();
       }
+      net_publish_event(fingerprint_last_matched_slot(), true);
       if (device_config_mode() == DEVICE_MODE_HID) {
         ESP_LOGI(TAG, "finger matched; requesting HID password");
         if (!request_and_type_password()) ESP_LOGW(TAG, "HID helper request failed");

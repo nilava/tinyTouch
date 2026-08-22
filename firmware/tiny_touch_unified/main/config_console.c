@@ -6,6 +6,7 @@
 
 #include "fingerprint.h"
 #include "device_config.h"
+#include "net.h"
 #include "piv.h"
 #include "touch_pin_hid.h"
 #include "esp_log.h"
@@ -319,6 +320,36 @@ static void handle_command(void) {
     } else {
       send_line("ERR PIN_SET format=6-8_digits");
     }
+  } else if (strncmp(command, "WIFI_SET ", 9) == 0) {
+    if (!require_config_authorization()) return;
+    char *arg = command + 9;
+    char *sep = strchr(arg, ' ');
+    if (sep) *sep = '\0';
+    const char *psk = sep ? sep + 1 : "";
+    if (net_set_wifi(arg, psk)) {
+      net_reload();
+      send_line("OK WIFI_SET reboot_recommended");
+    } else {
+      send_line("ERR WIFI_SET format=<ssid>_<psk>");
+    }
+  } else if (strncmp(command, "MQTT_SET ", 9) == 0) {
+    if (!require_config_authorization()) return;
+    char *arg = command + 9;
+    char *sep = strchr(arg, ' ');
+    if (sep) *sep = '\0';
+    const char *prefix = sep ? sep + 1 : "";
+    if (net_set_mqtt(arg, prefix)) {
+      net_reload();
+      send_line("OK MQTT_SET reboot_recommended");
+    } else {
+      send_line("ERR MQTT_SET format=<uri>_<prefix>");
+    }
+  } else if (strcmp(command, "NET_STATUS") == 0) {
+    char net[128];
+    net_status(net, sizeof(net));
+    snprintf(line, sizeof(line), "OK NET_STATUS %s time=%s",
+             net, net_time_valid() ? "valid" : "unset");
+    send_line(line);
   } else if (strncmp(command, "DURESS_SLOT ", 12) == 0) {
     if (!require_config_authorization()) return;
     const char *arg = command + 12;
