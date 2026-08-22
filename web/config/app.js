@@ -25,7 +25,7 @@ function parseKV(text) {
   return out;
 }
 function setDot(id, cls) { const el = $(id); if (el) el.className = "sdot " + (cls || ""); }
-function setText(id, v) { const el = $(id); if (el) el.textContent = v; }
+function setText(id, v) { const el = $(id); if (el) { el.textContent = v; el.classList.remove("skeleton"); } }
 const hidSupported = "hid" in navigator;
 
 const USB_VID = 0x303a;
@@ -39,14 +39,18 @@ if (!hidSupported) {
 }
 
 const toasts = $("#toasts");
+const TOAST_ICON = {
+  success: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l5 5L20 6"/></svg>',
+  error: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M12 8h.01M11 12h1v4h1"/></svg>',
+};
 function toast(text, kind = "info") {
   const el = document.createElement("div");
   el.className = `toast ${kind}`;
-  const icon = kind === "success" ? "✓" : kind === "error" ? "✕" : "i";
-  el.innerHTML = `<span class="ic">${icon}</span><span></span>`;
+  el.innerHTML = `<span class="ic">${TOAST_ICON[kind] || TOAST_ICON.info}</span><span></span>`;
   el.lastChild.textContent = text;
   toasts.appendChild(el);
-  setTimeout(() => { el.classList.add("out"); setTimeout(() => el.remove(), 220); }, 3200);
+  setTimeout(() => { el.classList.add("out"); setTimeout(() => el.remove(), 260); }, 3400);
 }
 // Pre-connect hint line only; all action feedback goes through toasts.
 function show(text, kind = "") {
@@ -156,6 +160,7 @@ async function refreshStatus() {
     // reflect mode in the segmented control
     document.querySelectorAll("#mode-seg button").forEach((b) =>
       b.classList.toggle("active", b.dataset.mode === s.mode));
+    const seg = $("#mode-seg"); if (seg) seg.classList.toggle("hid", s.mode === "hid");
   } catch {}
   try {
     const n = parseKV((await sendCommand("NET_STATUS")).replace(/^OK NET_STATUS /, ""));
@@ -176,11 +181,13 @@ async function refreshStatus() {
 }
 
 $("#connect").addEventListener("click", async () => {
+  const cbtn = $("#connect");
+  const cprev = cbtn.innerHTML;
   try {
-    show("Select the tinyTouch device…");
     const filters = [{ vendorId: USB_VID, productId: USB_PID }];
     const devices = await navigator.hid.requestDevice({ filters });
-    if (!devices.length) { show("No device selected.", ""); return; }
+    if (!devices.length) { return; }
+    cbtn.disabled = true; cbtn.innerHTML = '<span class="spinner"></span> Connecting…';
     device = devices[0];
     if (!device.opened) await device.open();
 
@@ -212,13 +219,15 @@ $("#connect").addEventListener("click", async () => {
 
     const pong = await sendCommand("PING", { timeoutMs: 3000 });
     if (pong !== "PONG") throw new Error("Unexpected reply: " + pong);
-    show("Connected.", "success");
     connPill.classList.add("on");
     connText.textContent = "Connected";
+    $("#hero").hidden = true;
     panel.hidden = false;
+    toast("Device connected", "success");
     await refreshStatus();
   } catch (error) {
-    show(/no device selected|cancelled/i.test(error.message) ? "Connection cancelled." : error.message, "error");
+    cbtn.disabled = false; cbtn.innerHTML = cprev;
+    if (!/no device selected|cancelled|null/i.test(error.message || "")) toast(error.message, "error");
   }
 });
 

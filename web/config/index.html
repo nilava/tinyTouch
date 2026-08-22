@@ -1,67 +1,76 @@
 <!doctype html>
 <html lang="en">
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0b0c0f"><title>Configure tinyTouch</title>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#07080b"><title>Configure tinyTouch</title>
 <link rel="stylesheet" href="styles.css">
 <main class="page">
   <a class="back" href="/tinytouch/">← tinyTouch</a>
   <div class="topbar">
-    <h1>tinyTouch</h1>
+    <div class="brand">
+      <span class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M12 11a2 2 0 0 0-2 2c0 1.5.5 3 .5 3"/><path d="M12 7a6 6 0 0 0-6 6c0 2 .5 3.5.5 3.5"/><path d="M12 3a10 10 0 0 0-10 10"/><path d="M12 11a2 2 0 0 1 2 2c0 2-.5 4-1 5.5"/><path d="M16 13a4 4 0 0 0-4-4"/></svg></span>
+      <h1>tinyTouch</h1>
+    </div>
     <span id="conn-pill" class="pill"><span class="dot"></span><span id="conn-text">Disconnected</span></span>
   </div>
   <p class="subtitle">Device configuration</p>
 
-  <button id="connect" class="btn primary block">Connect device</button>
-  <p id="message" class="hint">Chrome or Edge required. Keep the device plugged in.</p>
+  <!-- connect hero -->
+  <section id="hero" class="hero">
+    <div class="glyph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="8" rx="2"/><path d="M9 10v4a3 3 0 0 0 6 0v-4M12 17v5"/></svg></div>
+    <h2>Connect your tinyTouch</h2>
+    <p>Plug in the device over USB, then connect to configure it.</p>
+    <button id="connect" class="btn primary block">Connect device</button>
+    <p id="message" class="hint">Chrome or Edge required · keep the device plugged in</p>
+  </section>
 
   <section id="panel" hidden>
-    <div class="summary" id="summary">
-      <div class="cell"><div class="k">Mode</div><div class="v"><span class="sdot" id="sd-mode"></span><span id="sum-mode">—</span></div></div>
-      <div class="cell"><div class="k">Sensor</div><div class="v"><span class="sdot" id="sd-sensor"></span><span id="sum-sensor">—</span></div></div>
-      <div class="cell"><div class="k">Fingerprints</div><div class="v"><span id="sum-fp">—</span></div></div>
-      <div class="cell"><div class="k">Wi-Fi</div><div class="v"><span class="sdot" id="sd-wifi"></span><span id="sum-wifi">—</span></div></div>
-      <div class="cell"><div class="k">MQTT</div><div class="v"><span class="sdot" id="sd-mqtt"></span><span id="sum-mqtt">—</span></div></div>
-      <div class="cell"><div class="k">BLE</div><div class="v"><span class="sdot" id="sd-ble"></span><span id="sum-ble">—</span></div></div>
+    <div class="summary">
+      <div class="stat" style="animation-delay:.02s"><div class="top"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 9h6v6H9z"/></svg>Mode</div><div class="v"><span class="sdot" id="sd-mode"></span><span id="sum-mode" class="skeleton"></span></div></div>
+      <div class="stat" style="animation-delay:.06s"><div class="top"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 11a2 2 0 0 0-2 2M12 7a6 6 0 0 0-6 6M16 13a4 4 0 0 0-4-4"/></svg>Sensor</div><div class="v"><span class="sdot" id="sd-sensor"></span><span id="sum-sensor" class="skeleton"></span></div></div>
+      <div class="stat" style="animation-delay:.1s"><div class="top"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-3.3 3.6-5 8-5s8 1.7 8 5"/></svg>Prints</div><div class="v"><span id="sum-fp" class="skeleton"></span></div></div>
+      <div class="stat" style="animation-delay:.14s"><div class="top"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 13a10 10 0 0 1 14 0M8.5 16.5a5 5 0 0 1 7 0M2 9a15 15 0 0 1 20 0"/><circle cx="12" cy="20" r="1"/></svg>Wi-Fi</div><div class="v"><span class="sdot" id="sd-wifi"></span><span id="sum-wifi" class="skeleton"></span></div></div>
+      <div class="stat" style="animation-delay:.18s"><div class="top"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="7" rx="1.5"/><rect x="3" y="13" width="18" height="7" rx="1.5"/><path d="M7 7.5h.01M7 16.5h.01"/></svg>MQTT</div><div class="v"><span class="sdot" id="sd-mqtt"></span><span id="sum-mqtt" class="skeleton"></span></div></div>
+      <div class="stat" style="animation-delay:.22s"><div class="top"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7l10 10-5 5V2l5 5L7 17"/></svg>BLE</div><div class="v"><span class="sdot" id="sd-ble"></span><span id="sum-ble" class="skeleton"></span></div></div>
     </div>
 
     <div class="lockbar" id="lockbar">
-      <span class="txt" id="lock-text">🔒 Locked — unlock to change settings</span>
-      <button id="unlock" class="btn small">Unlock (touch sensor)</button>
+      <span class="txt" id="lock-text"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Locked — unlock to change settings</span>
+      <button id="unlock" class="btn small">Unlock</button>
     </div>
 
     <fieldset id="controls" class="controls" disabled>
-      <div class="card">
-        <h2>Mode</h2>
-        <p class="note">How the device authenticates: PIV smartcard or a typed password over USB.</p>
-        <div class="segmented" id="mode-seg">
+      <div class="card" style="animation-delay:.05s">
+        <div class="head"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 9h6v6H9z"/></svg><h2>Authentication mode</h2></div>
+        <p class="note">PIV smartcard (challenge/response) or a typed password over USB.</p>
+        <div class="segmented" id="mode-seg"><span class="glider"></span>
           <button type="button" data-mode="piv">PIV smartcard</button>
           <button type="button" data-mode="hid">HID password</button>
         </div>
       </div>
 
-      <div class="card">
-        <h2>Wi-Fi</h2>
-        <div class="field"><label>SSID</label><input id="wifi-ssid" type="text" autocomplete="off"><button class="btn small" data-cmd="wifi">Save</button></div>
+      <div class="card" style="animation-delay:.1s">
+        <div class="head"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 13a10 10 0 0 1 14 0M8.5 16.5a5 5 0 0 1 7 0M2 9a15 15 0 0 1 20 0"/><circle cx="12" cy="20" r="1"/></svg><h2>Wi-Fi</h2></div>
+        <div class="field"><label>Network</label><input id="wifi-ssid" type="text" placeholder="SSID" autocomplete="off"><button class="btn small" data-cmd="wifi">Save</button></div>
         <div class="field"><label>Password</label><input id="wifi-psk" type="password" autocomplete="off"><span></span></div>
       </div>
 
-      <div class="card">
-        <h2>MQTT</h2>
+      <div class="card" style="animation-delay:.15s">
+        <div class="head"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="7" rx="1.5"/><rect x="3" y="13" width="18" height="7" rx="1.5"/><path d="M7 7.5h.01M7 16.5h.01"/></svg><h2>MQTT</h2></div>
         <div class="field"><label>Broker URI</label><input id="mqtt-uri" type="text" placeholder="mqtt://192.168.1.10:1883" autocomplete="off"><button class="btn small" data-cmd="mqtt">Save</button></div>
         <div class="field"><label>Topic prefix</label><input id="mqtt-prefix" type="text" placeholder="tinytouch" autocomplete="off"><span></span></div>
       </div>
 
-      <div class="card">
-        <h2>Security</h2>
-        <div class="field"><label>PIV PIN</label><input id="pin" type="text" inputmode="numeric" maxlength="8" placeholder="6–8 digits" autocomplete="off"><button class="btn small" data-cmd="pin">Set PIN</button></div>
+      <div class="card" style="animation-delay:.2s">
+        <div class="head"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l7 4v5c0 5-3 8-7 11-4-3-7-6-7-11V6z"/></svg><h2>Security</h2></div>
+        <div class="field"><label>PIV PIN</label><input id="pin" type="text" inputmode="numeric" maxlength="8" placeholder="6–8 digits" autocomplete="off"><button class="btn small" data-cmd="pin">Set</button></div>
         <div class="field"><label>Duress finger</label>
           <select id="duress"><option value="off">disabled</option><option>1</option><option>2</option><option>3</option><option>4</option><option value="5">5</option></select>
           <button class="btn small" data-cmd="duress">Save</button></div>
         <p class="note">The duress finger wipes the device when matched.</p>
       </div>
 
-      <div class="card">
-        <h2>BLE keyboard</h2>
-        <p class="note">Type a credential to a paired iPad/phone/TV over Bluetooth when a chosen finger matches.</p>
+      <div class="card" style="animation-delay:.25s">
+        <div class="head"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7l10 10-5 5V2l5 5L7 17"/></svg><h2>BLE keyboard</h2></div>
+        <p class="note">Type a credential to a paired iPad / phone / TV over Bluetooth when a chosen finger matches. Reboot after enabling, then pair from the device's Bluetooth settings.</p>
         <div class="field"><label>Enable</label>
           <select id="ble-enable"><option value="off">off</option><option value="on">on</option></select>
           <button class="btn small" data-cmd="ble-enable">Save</button></div>
@@ -71,18 +80,19 @@
         <div class="field"><label>Text to type</label><input id="ble-text" type="text" autocomplete="off"><button class="btn small" data-cmd="ble-text">Save</button></div>
       </div>
 
-      <div class="card">
-        <h2>Firmware update</h2>
-        <p class="note">Reboots into download mode, then flashes a merged image (<code>idf.py merge-bin</code>) over USB.</p>
-        <div class="field"><label>Merged .bin</label><input id="fw-file" type="file" accept=".bin"><button id="flash-fw" class="btn small">Flash</button></div>
+      <div class="card" style="animation-delay:.3s">
+        <div class="head"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M8 11l4 4 4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg><h2>Firmware update</h2></div>
+        <p class="note">Reboots the device into flash (download) mode, then writes a merged image over USB. Build one with <code>idf.py merge-bin</code> → <code>build/merged-binary.bin</code>.</p>
+        <div class="field"><label>Merged .bin</label><input id="fw-file" type="file" accept=".bin"><span></span></div>
+        <button id="flash-fw" class="btn small block">Reboot to flash mode &amp; update firmware</button>
         <div id="flash-progress" class="progress-wrap" hidden>
           <div><span id="flash-stage">Flashing</span> <strong id="flash-percent">0%</strong></div>
           <progress id="flash-bar" max="100" value="0">0%</progress>
         </div>
       </div>
 
-      <div class="card">
-        <h2>Device</h2>
+      <div class="card" style="animation-delay:.35s">
+        <div class="head"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v8M6.3 6.3a8 8 0 1 0 11.4 0"/></svg><h2>Device</h2></div>
         <button class="btn small" data-cmd="reboot">Reboot device</button>
       </div>
     </fieldset>
