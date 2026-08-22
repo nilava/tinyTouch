@@ -27,8 +27,13 @@ function parseKV(text) {
 let autoRefreshTimer = null;
 function startAutoRefresh() {
   stopAutoRefresh();
-  // Light poll so the summary (esp. last-touched slot) stays live.
-  autoRefreshTimer = setInterval(() => { if (device) refreshStatus().catch(() => {}); }, 3000);
+  // Light, silent poll so the summary (esp. last-touched slot, BLE state)
+  // stays live without flooding the activity log.
+  autoRefreshTimer = setInterval(async () => {
+    if (!device) return;
+    suppressLog = true;
+    try { await refreshStatus(); } catch {} finally { suppressLog = false; }
+  }, 5000);
 }
 function stopAutoRefresh() { if (autoRefreshTimer) { clearInterval(autoRefreshTimer); autoRefreshTimer = null; } }
 function markDisconnected() {
@@ -133,8 +138,9 @@ async function readResponse() {
   return out;
 }
 
+let suppressLog = false;
 async function sendCommand(command, { timeoutMs = 8000 } = {}) {
-  writeLog(`→ ${command}`);
+  if (!suppressLog) writeLog(`→ ${command}`);
   const bytes = new TextEncoder().encode(command);
   const size = CHUNK_DATA();
   // Write the command in [flag][len][data] chunks.
@@ -153,7 +159,7 @@ async function sendCommand(command, { timeoutMs = 8000 } = {}) {
   await sleep(60);
   while (Date.now() < deadline) {
     const text = await readResponse();
-    if (text !== null) { writeLog(`← ${text}`); return text; }
+    if (text !== null) { if (!suppressLog) writeLog(`← ${text}`); return text; }
     await sleep(120);
   }
   throw new Error("Timed out waiting for the device.");

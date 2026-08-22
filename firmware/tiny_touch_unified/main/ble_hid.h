@@ -22,5 +22,6 @@ bool ble_hid_set_text(const char *text);    // credential to type
 // Type the stored credential to the bonded host. No-op if not connected.
 bool ble_hid_type_credential(void);
 bool ble_hid_start_pairing(void);  // (re)start advertising for pairing
+void ble_hid_note_auth(int success, int reason);
 
 void ble_hid_status(char *out, size_t cap);

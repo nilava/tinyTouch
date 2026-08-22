@@ -14,6 +14,7 @@
 #include "freertos/semphr.h"
 
 #include "esp_hid_gap.h"
+#include "ble_hid.h"
 
 #if CONFIG_BT_NIMBLE_ENABLED
 #include "host/ble_hs.h"
@@ -565,8 +566,9 @@ static void ble_gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_p
      * AUTHENTICATION
      * */
     case ESP_GAP_BLE_AUTH_CMPL_EVT:
+        ble_hid_note_auth(param->ble_security.auth_cmpl.success,
+                          param->ble_security.auth_cmpl.fail_reason);
         if (!param->ble_security.auth_cmpl.success) {
-            // if AUTH ERROR,hid maybe don't work.
             ESP_LOGE(TAG, "BLE GAP AUTH ERROR: 0x%x", param->ble_security.auth_cmpl.fail_reason);
         } else {
             ESP_LOGI(TAG, "BLE GAP AUTH SUCCESS");

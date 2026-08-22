@@ -22,6 +22,7 @@ static bool started;
 static volatile bool connected;
 static esp_hidd_dev_t *hid_dev;
 static char ble_error[64] = "none";
+static char auth_info[40] = "none";
 
 // Standard boot-keyboard report map, report ID 1: [modifier][reserved][6 keys].
 static const uint8_t keyboard_report_map[] = {
@@ -191,12 +192,17 @@ bool ble_hid_start_pairing(void) {
   return started;
 }
 
+void ble_hid_note_auth(int success, int reason) {
+  if (success) strlcpy(auth_info, "success", sizeof(auth_info));
+  else snprintf(auth_info, sizeof(auth_info), "fail:0x%x", reason);
+}
+
 void ble_hid_status(char *out, size_t cap) {
   int bonds = started ? esp_ble_get_bond_device_num() : -1;
-  snprintf(out, cap, "enabled=%s state=%s slot=%u text=%s bonds=%d err=%s",
+  snprintf(out, cap, "enabled=%s state=%s slot=%u text=%s bonds=%d auth=%s err=%s",
            cfg_enabled ? "yes" : "no",
            connected ? "connected" : (started ? "advertising" : "off"),
-           cfg_slot, cfg_text[0] ? "set" : "unset", bonds, ble_error);
+           cfg_slot, cfg_text[0] ? "set" : "unset", bonds, auth_info, ble_error);
 }
 
 // The copied esp_hid_gap.c calls these on BLE connect/disconnect. Connection
