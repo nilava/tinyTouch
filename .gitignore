@@ -12,3 +12,4 @@ firmware/tiny_touch_unified/sdkconfig.old
 
 build/distribution/
 dist/
+.venv-test/
