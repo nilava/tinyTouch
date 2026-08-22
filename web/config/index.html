@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#090909"><title>Configure tinyTouch</title>
+<link rel="stylesheet" href="styles.css">
+<main class="page">
+  <a class="back" href="/tinytouch/">← tinyTouch</a>
+  <h1>Configure tinyTouch</h1>
+  <p>Use Chrome or Edge with a USB data cable. This talks to the running device — no download mode needed.</p>
+  <div id="message" class="message" role="status">Connect your device to begin.</div>
+  <button id="connect" type="button">Connect device</button>
+
+  <section id="panel" hidden>
+    <p class="firmware-version">Device: <strong id="status">…</strong></p>
+    <p class="firmware-version">Network: <strong id="netstatus">…</strong></p>
+
+    <div id="unlock-note" class="note">Changes require a fingerprint touch to unlock configuration.</div>
+    <button id="unlock" type="button">Unlock (touch sensor)</button>
+
+    <fieldset id="controls" disabled>
+      <h2>Wi-Fi</h2>
+      <label>SSID <input id="wifi-ssid" type="text" autocomplete="off"></label>
+      <label>Password <input id="wifi-psk" type="password" autocomplete="off"></label>
+      <button data-cmd="wifi" type="button">Save Wi-Fi</button>
+
+      <h2>MQTT</h2>
+      <label>Broker URI <input id="mqtt-uri" type="text" placeholder="mqtt://192.168.1.10:1883" autocomplete="off"></label>
+      <label>Topic prefix <input id="mqtt-prefix" type="text" placeholder="tinytouch" autocomplete="off"></label>
+      <button data-cmd="mqtt" type="button">Save MQTT</button>
+
+      <h2>PIV PIN</h2>
+      <label>New PIN (6–8 digits) <input id="pin" type="text" inputmode="numeric" maxlength="8" autocomplete="off"></label>
+      <button data-cmd="pin" type="button">Set PIN</button>
+
+      <h2>Duress finger</h2>
+      <label>Wipe slot
+        <select id="duress"><option value="off">disabled</option><option>1</option><option>2</option><option>3</option><option>4</option><option value="5">5 (default)</option></select>
+      </label>
+      <button data-cmd="duress" type="button">Save duress slot</button>
+
+      <h2>Mode</h2>
+      <label>Runtime mode
+        <select id="mode"><option value="piv">PIV smartcard</option><option value="hid">HID password</option></select>
+      </label>
+      <button data-cmd="mode" type="button">Switch mode</button>
+
+      <h2>Device</h2>
+      <button data-cmd="reboot" type="button">Reboot device</button>
+    </fieldset>
+  </section>
+
+  <p id="browser-note" class="note"></p>
+  <pre id="log" hidden>No device activity yet.</pre>
+</main>
+<script type="module" src="app.js"></script>
+</html>
