@@ -54,8 +54,11 @@ static bool send_key(uint8_t modifier, uint8_t key) {
 }
 
 static bool type_dummy_pin(void) {
-  for (int i = 0; i < 6; i++) {
-    if (!send_key(0, HID_KEY_0)) return false;
+  char pin[9];
+  if (!piv_pin_get(pin, sizeof(pin))) return false;
+  for (const char *cursor = pin; *cursor; cursor++) {
+    uint8_t key = *cursor == '0' ? HID_KEY_0 : (uint8_t)(HID_KEY_1 + (*cursor - '1'));
+    if (!send_key(0, key)) return false;
   }
   return send_key(0, HID_KEY_ENTER);
 }

@@ -299,6 +299,14 @@ static void handle_command(void) {
     bool ok = fingerprint_delete((uint16_t)slot);
     snprintf(line, sizeof(line), ok ? "OK DELETE slot=%lu" : "ERR DELETE slot=%lu", slot);
     send_line(line);
+  } else if (strncmp(command, "PIN_SET ", 8) == 0) {
+    if (!require_config_authorization()) return;
+    if (piv_pin_set(command + 8)) {
+      snprintf(line, sizeof(line), "OK PIN_SET retries=%d", piv_pin_retries_left());
+      send_line(line);
+    } else {
+      send_line("ERR PIN_SET format=6-8_digits");
+    }
   } else if (strcmp(command, "DELETE_ALL") == 0) {
     if (!require_config_authorization()) return;
     send_line(fingerprint_delete_all() ? "OK DELETE_ALL" : "ERR DELETE_ALL");

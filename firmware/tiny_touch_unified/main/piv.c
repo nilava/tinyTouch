@@ -79,6 +79,13 @@ static const TickType_t PIN_VERIFIED_WINDOW_TICKS = pdMS_TO_TICKS(60000);
 static const TickType_t USER_PRESENCE_WINDOW_TICKS = pdMS_TO_TICKS(10000);
 static const TickType_t PAIRING_MODE_WINDOW_TICKS = pdMS_TO_TICKS(120000);
 
+#define PIV_PIN_MAX_RETRIES 3
+#define PIV_PIN_MIN_LEN 6
+#define PIV_PIN_MAX_LEN 8
+static const char PIV_PIN_DEFAULT[] = "123456";
+static char configured_pin[PIV_PIN_MAX_LEN + 1];
+static uint8_t pin_retries_left = PIV_PIN_MAX_RETRIES;
+
 static size_t encode_len(uint8_t *out, size_t len);
 static bool respond_data(const uint8_t *data, size_t data_len, uint8_t *response,
                          size_t *response_len, size_t response_cap);
@@ -352,19 +359,148 @@ static bool handle_get_data(const uint8_t *apdu, size_t apdu_len, uint8_t *respo
   return append_sw(response, response_len, response_cap, 0x6a88);
 }
 
+static bool pin_is_valid_format(const char *pin) {
+  size_t length = strlen(pin);
+  if (length < PIV_PIN_MIN_LEN || length > PIV_PIN_MAX_LEN) return false;
+  for (size_t i = 0; i < length; i++) {
+    if (pin[i] < '0' || pin[i] > '9') return false;
+  }
+  return true;
+}
+
+static void pin_store(void) {
+  nvs_handle_t handle;
+  if (nvs_open("piv_pin", NVS_READWRITE, &handle) != ESP_OK) return;
+  esp_err_t result = nvs_set_str(handle, "pin", configured_pin);
+  if (result == ESP_OK) result = nvs_set_u8(handle, "retries", pin_retries_left);
+  if (result == ESP_OK) result = nvs_commit(handle);
+  nvs_close(handle);
+  if (result != ESP_OK) ESP_LOGW(TAG, "PIN state could not be persisted");
+}
+
+static void pin_load(void) {
+  strlcpy(configured_pin, PIV_PIN_DEFAULT, sizeof(configured_pin));
+  pin_retries_left = PIV_PIN_MAX_RETRIES;
+  nvs_handle_t handle;
+  if (nvs_open("piv_pin", NVS_READONLY, &handle) != ESP_OK) return;
+  char stored[PIV_PIN_MAX_LEN + 1];
+  size_t length = sizeof(stored);
+  if (nvs_get_str(handle, "pin", stored, &length) == ESP_OK &&
+      pin_is_valid_format(stored)) {
+    strlcpy(configured_pin, stored, sizeof(configured_pin));
+  }
+  uint8_t retries = PIV_PIN_MAX_RETRIES;
+  if (nvs_get_u8(handle, "retries", &retries) == ESP_OK &&
+      retries <= PIV_PIN_MAX_RETRIES) {
+    pin_retries_left = retries;
+  }
+  nvs_close(handle);
+}
+
+bool piv_pin_set(const char *pin) {
+  if (!pin_is_valid_format(pin)) return false;
+  strlcpy(configured_pin, pin, sizeof(configured_pin));
+  pin_retries_left = PIV_PIN_MAX_RETRIES;
+  pin_store();
+  return true;
+}
+
+bool piv_pin_get(char *out, size_t cap) {
+  if (cap <= strlen(configured_pin)) return false;
+  strlcpy(out, configured_pin, cap);
+  return true;
+}
+
+int piv_pin_retries_left(void) {
+  return pin_retries_left;
+}
+
+static bool pin_attempt_matches(const char *attempt) {
+  uint8_t expected[PIV_PIN_MAX_LEN];
+  uint8_t provided[PIV_PIN_MAX_LEN];
+  memset(expected, 0xff, sizeof(expected));
+  memset(provided, 0xff, sizeof(provided));
+  memcpy(expected, configured_pin, strlen(configured_pin));
+  memcpy(provided, attempt, strlen(attempt));
+  uint8_t diff = (uint8_t)(strlen(configured_pin) ^ strlen(attempt));
+  for (size_t i = 0; i < PIV_PIN_MAX_LEN; i++) diff |= expected[i] ^ provided[i];
+  return diff == 0;
+}
+
 static bool handle_verify(const uint8_t *apdu, size_t apdu_len,
                           uint8_t *response, size_t *response_len, size_t response_cap) {
-  const uint8_t *data = NULL;
-  size_t data_len = 0;
-  if (apdu[2] != 0x00 || apdu[3] != 0x80 ||
-      !read_lc_data(apdu, apdu_len, &data, &data_len)) {
+  if (apdu[3] != 0x80) {
     pin_verified_until = 0;
     return append_sw(response, response_len, response_cap, 0x6a86);
   }
-  (void)data;
-  (void)data_len;
-  pin_verified_until = xTaskGetTickCount() + PIN_VERIFIED_WINDOW_TICKS;
-  return append_sw(response, response_len, response_cap, 0x9000);
+  if (apdu[2] == 0xff) {
+    pin_verified_until = 0;
+    return append_sw(response, response_len, response_cap, 0x9000);
+  }
+  if (apdu[2] != 0x00) {
+    pin_verified_until = 0;
+    return append_sw(response, response_len, response_cap, 0x6a86);
+  }
+  if (apdu_len == 4) {
+    if (pin_retries_left == 0) {
+      return append_sw(response, response_len, response_cap, 0x6983);
+    }
+    TickType_t now = xTaskGetTickCount();
+    if (pin_verified_until != 0 &&
+        (TickType_t)(pin_verified_until - now) <= PIN_VERIFIED_WINDOW_TICKS) {
+      return append_sw(response, response_len, response_cap, 0x9000);
+    }
+    return append_sw(response, response_len, response_cap, 0x63c0 | pin_retries_left);
+  }
+  const uint8_t *data = NULL;
+  size_t data_len = 0;
+  if (!read_lc_data(apdu, apdu_len, &data, &data_len)) {
+    pin_verified_until = 0;
+    return append_sw(response, response_len, response_cap, 0x6a86);
+  }
+  if (pin_retries_left == 0) {
+    pin_verified_until = 0;
+    return append_sw(response, response_len, response_cap, 0x6983);
+  }
+  if (data_len < PIV_PIN_MIN_LEN || data_len > PIV_PIN_MAX_LEN) {
+    pin_verified_until = 0;
+    return append_sw(response, response_len, response_cap, 0x6a80);
+  }
+  char attempt[PIV_PIN_MAX_LEN + 1];
+  size_t attempt_len = 0;
+  bool padding_seen = false;
+  for (size_t i = 0; i < data_len; i++) {
+    if (data[i] == 0xff) {
+      padding_seen = true;
+      continue;
+    }
+    if (padding_seen || data[i] < '0' || data[i] > '9') {
+      pin_verified_until = 0;
+      return append_sw(response, response_len, response_cap, 0x6a80);
+    }
+    attempt[attempt_len++] = (char)data[i];
+  }
+  attempt[attempt_len] = '\0';
+  if (attempt_len < PIV_PIN_MIN_LEN) {
+    pin_verified_until = 0;
+    return append_sw(response, response_len, response_cap, 0x6a80);
+  }
+  if (pin_attempt_matches(attempt)) {
+    if (pin_retries_left != PIV_PIN_MAX_RETRIES) {
+      pin_retries_left = PIV_PIN_MAX_RETRIES;
+      pin_store();
+    }
+    pin_verified_until = xTaskGetTickCount() + PIN_VERIFIED_WINDOW_TICKS;
+    return append_sw(response, response_len, response_cap, 0x9000);
+  }
+  pin_verified_until = 0;
+  pin_retries_left--;
+  pin_store();
+  ESP_LOGW(TAG, "PIN mismatch, %u retries left", pin_retries_left);
+  if (pin_retries_left == 0) {
+    return append_sw(response, response_len, response_cap, 0x6983);
+  }
+  return append_sw(response, response_len, response_cap, 0x63c0 | pin_retries_left);
 }
 
 void piv_note_user_presence(void) {
@@ -465,6 +601,7 @@ static bool handle_general_authenticate(const uint8_t *apdu, size_t apdu_len,
 }
 
 void piv_init(void) {
+  pin_load();
   uint8_t mac[6];
   uint8_t device_hash[32];
   if (esp_read_mac(mac, ESP_MAC_WIFI_STA) == ESP_OK) {
