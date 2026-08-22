@@ -16,7 +16,7 @@ const hidSupported = "hid" in navigator;
 const USB_VID = 0x303a;
 const USB_PID = 0x4001;
 const REPORT_ID = 2;
-const REPORT_SIZE = 191;
+let REPORT_SIZE = 191;  // updated from the device's parsed descriptor on connect
 
 if (!hidSupported) {
   $("#browser-note").textContent = "Open this page in Google Chrome or Microsoft Edge (WebHID required).";
@@ -99,6 +99,14 @@ $("#connect").addEventListener("click", async () => {
       const feats = (device.collections || []).flatMap((c) =>
         (c.featureReports || []).map((r) => `id=${r.reportId} usagePage=0x${(c.usagePage||0).toString(16)}`));
       writeLog(`feature reports: ${feats.join(", ") || "none"}`);
+      // Size our writes to match the device's actual feature report length.
+      for (const c of device.collections || []) {
+        for (const r of c.featureReports || []) {
+          if (r.reportId !== REPORT_ID) continue;
+          const bits = (r.items || []).reduce((n, it) => n + (it.reportSize || 0) * (it.reportCount || 0), 0);
+          if (bits > 0) { REPORT_SIZE = Math.ceil(bits / 8); writeLog(`report size: ${REPORT_SIZE} bytes`); }
+        }
+      }
     } catch {}
 
     // Probe READ independently of WRITE. If read works but write fails, macOS is
