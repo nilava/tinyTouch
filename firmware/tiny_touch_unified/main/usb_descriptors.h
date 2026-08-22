@@ -14,4 +14,4 @@ void tiny_touch_init_serial(void);
 
 #define HID_REPORT_ID_KEYBOARD 1
 #define HID_REPORT_ID_CONFIG 2
-#define HID_CONFIG_REPORT_SIZE 191
+#define HID_CONFIG_REPORT_SIZE 63

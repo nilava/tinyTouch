@@ -40,9 +40,15 @@ static int64_t config_authorized_until;
 // HID path never touches the CDC the macOS helper holds, so it never contends.
 typedef enum { TRANSPORT_CDC, TRANSPORT_HID } transport_t;
 static transport_t active_transport = TRANSPORT_CDC;
-static char hid_command[HID_CONFIG_REPORT_SIZE + 1];
+// This platform caps HID feature-report transfers at 64 bytes, so commands and
+// responses longer than one report are chunked: each 63-byte report payload is
+// [flag][len][data...], flag=1 means more chunks follow, flag=0 is the last.
+#define HID_CHUNK_DATA (HID_CONFIG_REPORT_SIZE - 2)
+static char hid_command[512];        // reassembled inbound command
+static size_t hid_command_accum;     // bytes accumulated so far
 static volatile bool hid_command_pending;
-static char hid_response[HID_CONFIG_REPORT_SIZE + 1] = "IDLE";
+static char hid_response[512] = "IDLE";
+static size_t hid_response_off;      // outbound read cursor
 static volatile bool hid_processing;
 
 typedef struct {
@@ -57,8 +63,8 @@ static provision_buffer_t provision_key9d;
 
 void config_console_send_line(const char *line) {
   if (active_transport == TRANSPORT_HID) {
-    // Keep the latest line as the response the host will read back.
     strlcpy(hid_response, line, sizeof(hid_response));
+    hid_response_off = 0;
     return;
   }
   if (cdc_write_mutex) xSemaphoreTake(cdc_write_mutex, portMAX_DELAY);
@@ -477,20 +483,42 @@ static void console_task(void *arg) {
 // and let the console task process it, so blocking commands (e.g. the
 // fingerprint touch in CONFIG_UNLOCK) never stall the USB stack.
 void config_hid_on_command(const uint8_t *data, size_t len) {
-  if (hid_processing || hid_command_pending) return;
-  if (len > HID_CONFIG_REPORT_SIZE) len = HID_CONFIG_REPORT_SIZE;
-  size_t n = 0;
-  while (n < len && data[n] != 0) { hid_command[n] = (char)data[n]; n++; }
-  hid_command[n] = 0;
-  strlcpy(hid_response, "PENDING", sizeof(hid_response));
-  hid_command_pending = true;
+  if (hid_processing || hid_command_pending || len < 2) return;
+  uint8_t flag = data[0];
+  size_t chunk = data[1];
+  if (chunk > HID_CHUNK_DATA || 2 + chunk > len) return;
+  if (hid_command_accum + chunk >= sizeof(hid_command)) { hid_command_accum = 0; return; }
+  memcpy(hid_command + hid_command_accum, data + 2, chunk);
+  hid_command_accum += chunk;
+  if (flag == 0) {  // last chunk
+    hid_command[hid_command_accum] = 0;
+    hid_command_accum = 0;
+    strlcpy(hid_response, "PENDING", sizeof(hid_response));
+    hid_response_off = 0;
+    hid_command_pending = true;
+  }
 }
 
-// Called from the HID GET_REPORT callback: hand back the current response.
+// Called from the HID GET_REPORT callback: emit the next response chunk as
+// [flag][len][data]. flag=1 means more chunks remain, 0 marks the last.
 size_t config_hid_read_response(uint8_t *out, size_t cap) {
-  const char *src = (hid_processing || hid_command_pending) ? "PENDING" : hid_response;
-  size_t n = strlcpy((char *)out, src, cap);
-  return n < cap ? n : cap - 1;
+  if (cap < HID_CONFIG_REPORT_SIZE + 1) return 0;
+  const char *src;
+  size_t src_len;
+  if (hid_processing || hid_command_pending) {
+    src = "PENDING"; src_len = 7; hid_response_off = 0;
+  } else {
+    src = hid_response; src_len = strlen(hid_response);
+  }
+  size_t remaining = src_len > hid_response_off ? src_len - hid_response_off : 0;
+  size_t chunk = remaining < HID_CHUNK_DATA ? remaining : HID_CHUNK_DATA;
+  out[0] = (remaining > chunk) ? 1 : 0;
+  out[1] = (uint8_t)chunk;
+  memcpy(out + 2, src + hid_response_off, chunk);
+  memset(out + 2 + chunk, 0, HID_CONFIG_REPORT_SIZE - chunk);
+  hid_response_off += chunk;
+  if (out[0] == 0) hid_response_off = 0;  // reset for the next read cycle
+  return HID_CONFIG_REPORT_SIZE;
 }
 
 void config_console_start(void) {

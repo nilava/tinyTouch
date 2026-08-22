@@ -16,7 +16,7 @@ const hidSupported = "hid" in navigator;
 const USB_VID = 0x303a;
 const USB_PID = 0x4001;
 const REPORT_ID = 2;
-let REPORT_SIZE = 191;  // updated from the device's parsed descriptor on connect
+let REPORT_SIZE = 63;   // chunk-transport report payload; refined from descriptor on connect
 
 if (!hidSupported) {
   $("#browser-note").textContent = "Open this page in Google Chrome or Microsoft Edge (WebHID required).";
@@ -48,26 +48,50 @@ function decodeReport(view) {
 // Send a command as a feature report, then poll until a terminal (non-PENDING)
 // response comes back. The device rejects a new command while one is pending,
 // so callers must await this before sending the next.
+const CHUNK_DATA = () => REPORT_SIZE - 2;
+
+// Strip a leading report-ID byte if the platform includes it.
+function reportBody(view) {
+  return view.byteLength === REPORT_SIZE + 1
+    ? new Uint8Array(view.buffer, view.byteOffset + 1, REPORT_SIZE)
+    : new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
+}
+
+// Read a full (possibly multi-chunk) response: each report is [flag][len][data],
+// flag=1 means more chunks follow. Returns null while the device reports PENDING.
+async function readResponse() {
+  let out = "";
+  for (let i = 0; i < 64; i++) {  // hard cap on chunks
+    const body = reportBody(await device.receiveFeatureReport(REPORT_ID));
+    const flag = body[0], len = body[1];
+    out += new TextDecoder().decode(body.subarray(2, 2 + len));
+    if (flag === 0) break;
+  }
+  if (out === "PENDING" || out === "IDLE" || out === "") return null;
+  return out;
+}
+
 async function sendCommand(command, { timeoutMs = 8000 } = {}) {
   writeLog(`→ ${command}`);
-  const payload = new Uint8Array(REPORT_SIZE);
-  const encoded = new TextEncoder().encode(command);
-  payload.set(encoded.subarray(0, REPORT_SIZE));
-  await device.sendFeatureReport(REPORT_ID, payload);
+  const bytes = new TextEncoder().encode(command);
+  const size = CHUNK_DATA();
+  // Write the command in [flag][len][data] chunks.
+  for (let off = 0; off < bytes.length || off === 0; off += size) {
+    const slice = bytes.subarray(off, off + size);
+    const last = off + size >= bytes.length;
+    const payload = new Uint8Array(REPORT_SIZE);
+    payload[0] = last ? 0 : 1;
+    payload[1] = slice.length;
+    payload.set(slice, 2);
+    await device.sendFeatureReport(REPORT_ID, payload);
+    if (last) break;
+  }
 
   const deadline = Date.now() + timeoutMs;
   await sleep(60);
   while (Date.now() < deadline) {
-    const view = await device.receiveFeatureReport(REPORT_ID);
-    // receiveFeatureReport includes the report ID as byte 0 in some builds.
-    const body = view.byteLength === REPORT_SIZE + 1
-      ? new DataView(view.buffer, view.byteOffset + 1, REPORT_SIZE)
-      : view;
-    const text = decodeReport(body);
-    if (text && text !== "PENDING" && text !== "IDLE") {
-      writeLog(`← ${text}`);
-      return text;
-    }
+    const text = await readResponse();
+    if (text !== null) { writeLog(`← ${text}`); return text; }
     await sleep(120);
   }
   throw new Error("Timed out waiting for the device.");
@@ -114,7 +138,7 @@ $("#connect").addEventListener("click", async () => {
     // platform limitation, not a firmware bug.
     try {
       const v = await device.receiveFeatureReport(REPORT_ID);
-      writeLog(`read probe OK: ${v.byteLength} bytes ("${decodeReport(v.byteLength === REPORT_SIZE + 1 ? new DataView(v.buffer, v.byteOffset + 1, REPORT_SIZE) : v)}")`);
+      writeLog(`read probe OK: ${v.byteLength} bytes`);
     } catch (e) {
       writeLog(`read probe FAILED: ${e.message}`);
     }
