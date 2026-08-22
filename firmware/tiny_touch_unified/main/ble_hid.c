@@ -20,6 +20,7 @@ static char cfg_text[BLE_TEXT_CAP];
 static bool started;
 static volatile bool connected;
 static esp_hidd_dev_t *hid_dev;
+static char ble_error[64] = "none";
 
 // Standard boot-keyboard report map, report ID 1: [modifier][reserved][6 keys].
 static const uint8_t keyboard_report_map[] = {
@@ -124,23 +125,21 @@ static bool save_u8(const char *key, uint8_t value) {
 
 static void start_stack(void) {
   if (started || !cfg_enabled) return;
+  esp_err_t ret;
   // BLE/Bluedroid needs the default event loop. net.c only creates it when
   // Wi-Fi is configured, so create it here too (harmless if already present).
-  esp_err_t loop = esp_event_loop_create_default();
-  if (loop != ESP_OK && loop != ESP_ERR_INVALID_STATE) {
-    ESP_LOGE(TAG, "event loop init failed: 0x%x", loop);
-    return;
+  ret = esp_event_loop_create_default();
+  if (ret != ESP_OK && ret != ESP_ERR_INVALID_STATE) {
+    snprintf(ble_error, sizeof(ble_error), "event_loop:0x%x", ret); return;
   }
-  if (esp_hid_gap_init(HID_DEV_MODE) != ESP_OK) { ESP_LOGE(TAG, "gap init failed"); return; }
-  if (esp_hid_ble_gap_adv_init(ESP_HID_APPEARANCE_KEYBOARD, hid_config.device_name) != ESP_OK) {
-    ESP_LOGE(TAG, "adv init failed");
-    return;
-  }
-  if (esp_hidd_dev_init(&hid_config, ESP_HID_TRANSPORT_BLE, hidd_event_cb, &hid_dev) != ESP_OK) {
-    ESP_LOGE(TAG, "hidd init failed");
-    return;
-  }
+  ret = esp_hid_gap_init(HID_DEV_MODE);
+  if (ret != ESP_OK) { snprintf(ble_error, sizeof(ble_error), "gap_init:0x%x", ret); return; }
+  ret = esp_hid_ble_gap_adv_init(ESP_HID_APPEARANCE_KEYBOARD, hid_config.device_name);
+  if (ret != ESP_OK) { snprintf(ble_error, sizeof(ble_error), "adv_init:0x%x", ret); return; }
+  ret = esp_hidd_dev_init(&hid_config, ESP_HID_TRANSPORT_BLE, hidd_event_cb, &hid_dev);
+  if (ret != ESP_OK) { snprintf(ble_error, sizeof(ble_error), "hidd_init:0x%x", ret); return; }
   started = true;
+  strlcpy(ble_error, "none", sizeof(ble_error));
   ESP_LOGI(TAG, "BLE HID keyboard started");
 }
 
@@ -192,10 +191,10 @@ bool ble_hid_start_pairing(void) {
 }
 
 void ble_hid_status(char *out, size_t cap) {
-  snprintf(out, cap, "enabled=%s state=%s slot=%u text=%s",
+  snprintf(out, cap, "enabled=%s state=%s slot=%u text=%s err=%s",
            cfg_enabled ? "yes" : "no",
            connected ? "connected" : (started ? "advertising" : "off"),
-           cfg_slot, cfg_text[0] ? "set" : "unset");
+           cfg_slot, cfg_text[0] ? "set" : "unset", ble_error);
 }
 
 // The copied esp_hid_gap.c calls these on BLE connect/disconnect. Connection
